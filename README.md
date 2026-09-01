@@ -1,3 +1,31 @@
+Task 5を完了しました。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+  - PERFECTは串中央へスナップ
+  - GOOD LEFT／RIGHTは串中央から固定量ずらしてスナップ
+  - 成功時は落下を停止して串上へ固定
+  - 吸着と同時に横へ広がり、縦へ縮んでから戻る「ぷにっ」演出を追加
+  - MISSは従来どおり落下・再生成
+- [HitJudge.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift)
+  - 最寄りの串中心を表示補正でも利用できるよう整理
+調整値は[LandingAnimationParameters (line 49)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:49)にまとめています。
+- スナップ位置
+  - goodHorizontalOffset：GOODの左右固定ズレ
+  - stuckCenterYOffset：串先端に対する縦位置
+- スナップ時間
+  - snapDuration
+- ぷにっ変形量
+  - squashScaleX
+  - squashScaleY
+- アニメーション時間
+  - squashDuration
+  - restoreDuration
+現在値はスナップ0.08秒、横1.10倍、縦0.85倍、変形・復元合計0.13秒です。
+確認結果：
+- iPhone Simulator向けDebugビルド成功
+- iPhone 17 Pro Simulatorで起動成功
+- Task 4までの団子移動・串表示を維持しています。
+
 Task 4を完了しました。
 変更ファイル：
 - [HitJudge.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift)

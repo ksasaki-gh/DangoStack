@@ -46,9 +46,21 @@ final class DangoGameScene: SKScene {
         static let maximumFrameDuration: TimeInterval = 1.0 / 15.0
     }
 
+    private enum LandingAnimationParameters {
+        static let goodHorizontalOffset: CGFloat = 8
+        static let stuckCenterYOffset: CGFloat = 0
+        static let snapDuration: TimeInterval = 0.08
+
+        static let squashScaleX: CGFloat = 1.10
+        static let squashScaleY: CGFloat = 0.85
+        static let squashDuration: TimeInterval = 0.05
+        static let restoreDuration: TimeInterval = 0.08
+    }
+
     private enum DangoState {
         case movingHorizontally
         case falling
+        case stuck
     }
 
     private var skewers: [SKShapeNode] = []
@@ -182,6 +194,8 @@ final class DangoGameScene: SKScene {
             updateHorizontalMovement(of: dango, frameDuration: frameDuration)
         case .falling:
             updateFallingMovement(of: dango, frameDuration: frameDuration)
+        case .stuck:
+            break
         }
     }
 
@@ -237,6 +251,75 @@ final class DangoGameScene: SKScene {
         )
 
         print("[HitJudge] \(debugText(for: result))")
+
+        if case .miss = result {
+            return
+        }
+
+        guard let targetSkewerX = HitJudge.nearestSkewerCenterX(
+            dangoX: dango.position.x,
+            skewerCenterXs: skewerCenterXs
+        ) else { return }
+
+        stick(dango, result: result, targetSkewerX: targetSkewerX)
+    }
+
+    private func stick(
+        _ dango: SKShapeNode,
+        result: HitResult,
+        targetSkewerX: CGFloat
+    ) {
+        dangoState = .stuck
+
+        let targetPosition = CGPoint(
+            x: snappedX(for: result, skewerCenterX: targetSkewerX),
+            y: skewerTopY + LandingAnimationParameters.stuckCenterYOffset
+        )
+        let snapAction = SKAction.move(
+            to: targetPosition,
+            duration: LandingAnimationParameters.snapDuration
+        )
+        snapAction.timingMode = .easeOut
+
+        let squashAction = SKAction.group([
+            SKAction.scaleX(
+                to: LandingAnimationParameters.squashScaleX,
+                duration: LandingAnimationParameters.squashDuration
+            ),
+            SKAction.scaleY(
+                to: LandingAnimationParameters.squashScaleY,
+                duration: LandingAnimationParameters.squashDuration
+            ),
+        ])
+        squashAction.timingMode = .easeOut
+
+        let restoreAction = SKAction.group([
+            SKAction.scaleX(
+                to: 1,
+                duration: LandingAnimationParameters.restoreDuration
+            ),
+            SKAction.scaleY(
+                to: 1,
+                duration: LandingAnimationParameters.restoreDuration
+            ),
+        ])
+        restoreAction.timingMode = .easeOut
+
+        let puniAction = SKAction.sequence([squashAction, restoreAction])
+        dango.run(SKAction.group([snapAction, puniAction]))
+    }
+
+    private func snappedX(for result: HitResult, skewerCenterX: CGFloat) -> CGFloat {
+        switch result {
+        case .perfect:
+            return skewerCenterX
+        case .goodLeft:
+            return skewerCenterX - LandingAnimationParameters.goodHorizontalOffset
+        case .goodRight:
+            return skewerCenterX + LandingAnimationParameters.goodHorizontalOffset
+        case .miss:
+            return skewerCenterX
+        }
     }
 
     private func debugText(for result: HitResult) -> String {
@@ -258,8 +341,10 @@ final class DangoGameScene: SKScene {
     }
 
     private var dangoJudgementY: CGFloat {
-        let skewerTopY = size.height
-            * (Layout.skewerCenterYRatio + Layout.skewerHeightRatio / 2)
         return skewerTopY + DangoParameters.diameter / 2
+    }
+
+    private var skewerTopY: CGFloat {
+        size.height * (Layout.skewerCenterYRatio + Layout.skewerHeightRatio / 2)
     }
 }

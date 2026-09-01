@@ -1,3 +1,21 @@
+Task 4を完了しました。
+変更ファイル：
+- [HitJudge.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift)
+  - perfect、goodLeft、goodRight、missを定義
+  - 最も近い串を選択して横方向の距離を判定
+- [DangoGameScene.swift (line 224)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:224)
+  - 団子が串先端へ到達した時に1回だけ判定
+  - XcodeコンソールへPERFECT、GOOD LEFT、GOOD RIGHT、MISSを出力
+  - 判定後も団子は固定せず、従来どおり画面下まで落下
+判定幅は[HitJudge.swift (line 16)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift:16)の次の値で調整できます。
+- perfectThresholdRatio = 0.20
+- goodThresholdRatio = 0.38
+確認結果：
+- 左・中央・右それぞれのPERFECTを直接チェック
+- GOOD LEFT、GOOD RIGHT、MISSを直接チェック
+- iPhone Simulator向けDebugビルド成功
+- iPhone 17 Pro Simulatorで起動成功
+
 Task 3を完了しました。
 変更ファイル：
 - [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)

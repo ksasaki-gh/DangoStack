@@ -57,6 +57,7 @@ final class DangoGameScene: SKScene {
     private var horizontalDirection: CGFloat = 1
     private var previousUpdateTime: TimeInterval?
     private var respawnTimeRemaining: TimeInterval = 0
+    private var hasJudgedCurrentDango = false
 
     override init(size: CGSize) {
         super.init(size: size)
@@ -158,6 +159,7 @@ final class DangoGameScene: SKScene {
         dango = newDango
         dangoState = .movingHorizontally
         horizontalDirection = 1
+        hasJudgedCurrentDango = false
     }
 
     private func layoutDangoForCurrentSceneSize() {
@@ -201,6 +203,7 @@ final class DangoGameScene: SKScene {
 
     private func updateFallingMovement(of dango: SKShapeNode, frameDuration: CGFloat) {
         dango.position.y -= DangoParameters.fallingSpeed * frameDuration
+        judgeDangoIfNeeded(dango)
 
         let radius = DangoParameters.diameter / 2
         guard dango.position.y + radius < 0 else { return }
@@ -218,8 +221,45 @@ final class DangoGameScene: SKScene {
         }
     }
 
+    private func judgeDangoIfNeeded(_ dango: SKShapeNode) {
+        guard !hasJudgedCurrentDango,
+              dango.position.y <= dangoJudgementY else {
+            return
+        }
+
+        hasJudgedCurrentDango = true
+
+        let skewerCenterXs = Layout.skewerXPositionRatios.map { size.width * $0 }
+        let result = HitJudge.judge(
+            dangoX: dango.position.x,
+            dangoDiameter: DangoParameters.diameter,
+            skewerCenterXs: skewerCenterXs
+        )
+
+        print("[HitJudge] \(debugText(for: result))")
+    }
+
+    private func debugText(for result: HitResult) -> String {
+        switch result {
+        case .perfect:
+            return "PERFECT"
+        case .goodLeft:
+            return "GOOD LEFT"
+        case .goodRight:
+            return "GOOD RIGHT"
+        case .miss:
+            return "MISS"
+        }
+    }
+
     private var dangoHorizontalRange: ClosedRange<CGFloat> {
         let range = DangoParameters.horizontalRangeRatios
         return (size.width * range.lowerBound)...(size.width * range.upperBound)
+    }
+
+    private var dangoJudgementY: CGFloat {
+        let skewerTopY = size.height
+            * (Layout.skewerCenterYRatio + Layout.skewerHeightRatio / 2)
+        return skewerTopY + DangoParameters.diameter / 2
     }
 }

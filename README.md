@@ -1,3 +1,16 @@
+Task 2を完了しました。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+  - 茶色のSKShapeNodeで3本の串を追加
+  - 左・中央・右へ等間隔に配置
+  - 位置とサイズをシーンサイズ比の定数として分離
+  - シーンサイズ変更時に再配置
+  - 団子、当たり判定、移動処理は未実装
+確認結果：
+- iPhone Simulator向けDebugビルド成功
+- iPhone 17 Pro Simulatorで起動成功
+- 画面下側に同じサイズの串が3本表示されることを確認済みです。
+
 Task 1を完了しました。
 変更ファイル：
 - [GameView.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/GameView.swift)

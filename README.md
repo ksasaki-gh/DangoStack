@@ -1,3 +1,23 @@
+Task 3を完了しました。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+  - 画面上部にピンクの円形団子を追加
+  - 左右の範囲内を一定速度で自動往復
+  - タップ時のX座標を維持して真下へ落下
+  - 画面下へ出た後、0.6秒待って新しい団子を生成
+  - 既存の3本の串は維持
+  - 物理エンジン、串との当たり判定は未使用
+調整可能な値は[DangoParameters (line 34)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:34)にまとめています。
+- diameter：団子サイズ
+- horizontalSpeed：左右移動速度
+- horizontalRangeRatios：左右移動範囲
+- fallingSpeed：落下速度
+- respawnDelay：再生成までの待ち時間
+確認結果：
+- iPhone Simulator向けDebugビルド成功
+- iPhone 17 Pro Simulatorで起動成功
+- 団子が上部に表示され、時間経過で左右へ移動することを確認済みです。
+
 Task 2を完了しました。
 変更ファイル：
 - [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)

@@ -25,7 +25,7 @@ struct DangoStackApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            GameView()
         }
         .modelContainer(sharedModelContainer)
     }

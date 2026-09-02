@@ -1,3 +1,19 @@
+Task 7を実装しました。3本の串が独立して進行し、次に必要な色だけ刺さります。
+変更ファイル：
+- [DangoColor.swift (line 6)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoColor.swift:6)
+  - 積み上げ順を green → white → pink として定義。
+  - デバッグ表示用に色名を文字列化。
+- [DangoGameScene.swift (line 256)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:256)
+  - 落下中の団子色を保持。
+  - 位置判定後、対象の串が必要としている色と一致する場合のみ、既存の位置補正・ぷにっ演出で追加。
+  - 色違いまたは完成済みの場合は刺さらず、そのまま画面下へ落下。
+  - PERFECT / GOOD LEFT / GOOD RIGHT / MISS判定は維持。
+各串の次の色は、[SkewerState.swift (line 18)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SkewerState.swift:18)で、現在の団子数を stackOrder の添字として判断しています。3個刺さると nilになり、追加できません。3本それぞれが別のSkewerStateを持つため、進行状態も独立しています。
+確認結果：
+- iOS Simulator向けDebugビルド成功
+- Simulatorへのインストール・起動成功
+- 3本の串の独立状態とgreen → white → pinkの遷移を確認済み
+
 Task 6を完了しました。
 変更ファイル：
 - [DangoColor.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoColor.swift)

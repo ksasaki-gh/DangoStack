@@ -3,7 +3,7 @@
 //  DangoStack
 //
 
-enum DangoColor: CaseIterable {
+enum DangoColor: String, CaseIterable {
     case green
     case white
     case pink

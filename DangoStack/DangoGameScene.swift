@@ -74,6 +74,7 @@ final class DangoGameScene: SKScene {
     private var skewers: [SKShapeNode] = []
     private var skewerStates: [SkewerState] = []
     private var dango: SKShapeNode?
+    private var activeDangoColor: DangoColor?
     private var dangoState = DangoState.movingHorizontally
     private var horizontalDirection: CGFloat = 1
     private var previousUpdateTime: TimeInterval?
@@ -183,6 +184,7 @@ final class DangoGameScene: SKScene {
         addChild(newDango)
 
         dango = newDango
+        activeDangoColor = dangoColor
         dangoState = .movingHorizontally
         horizontalDirection = 1
         hasJudgedCurrentDango = false
@@ -239,6 +241,7 @@ final class DangoGameScene: SKScene {
 
         dango.removeFromParent()
         self.dango = nil
+        activeDangoColor = nil
         respawnTimeRemaining = DangoParameters.respawnDelay
     }
 
@@ -276,8 +279,17 @@ final class DangoGameScene: SKScene {
             skewerCenterXs: skewerCenterXs
         ) else { return }
 
-        guard !skewerStates[targetSkewerIndex].isFull else {
+        guard let dangoColor = activeDangoColor else { return }
+        guard let requiredColor = skewerStates[targetSkewerIndex].nextRequiredColor else {
             print("[Stack] Skewer is full")
+            return
+        }
+
+        guard dangoColor == requiredColor else {
+            print(
+                "[Stack] Color mismatch: \(dangoColor.rawValue), "
+                    + "required: \(requiredColor.rawValue)"
+            )
             return
         }
 
@@ -346,6 +358,7 @@ final class DangoGameScene: SKScene {
         dango.run(landingAction) { [weak self, weak dango] in
             guard let self, let dango, self.dango === dango else { return }
             self.dango = nil
+            self.activeDangoColor = nil
             self.respawnTimeRemaining = DangoParameters.respawnDelay
         }
     }

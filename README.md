@@ -1,3 +1,38 @@
+Task 6を完了しました。
+変更ファイル：
+- [DangoColor.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoColor.swift)
+  - green、white、pinkと生成順を定義
+- [SkewerState.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SkewerState.swift)
+  - 各串の団子数、次に必要な色、刺さったノード、満杯状態を管理
+  - 最大3個に制限
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+  - green → white → pinkの順で生成
+  - 成功後に次の団子を生成
+  - 3段の固定位置へスナップ
+  - 直下の団子だけを軽く縦方向へ変形
+  - PERFECT／GOOD補正とMISS処理を維持
+- [HitJudge.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift)
+  - 対象となる最近傍の串インデックスを取得可能に変更
+調整箇所：
+- 串の状態・最大数
+  [SkewerState.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SkewerState.swift:8)
+- 各段のY座標・団子間隔
+  [StackLayoutParameters (line 64)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:64)のdangoVerticalSpacing
+  - 1段目：串先端 − 104pt
+  - 2段目：串先端 − 52pt
+  - 3段目：串先端
+  - 現在の中心間隔は52ptで、直径56ptの団子が約4pt重なります。
+- 直下の団子の変形量
+  [LandingAnimationParameters (line 49)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:49)
+  - underlyingSquashScaleY = 0.94
+  - underlyingSquashDuration
+  - underlyingRestoreDuration
+確認結果：
+- Simulator向けDebugビルド成功
+- iPhone 17 Pro Simulatorで起動成功
+- 初期団子がgreenで表示されることを確認
+- green → white → pink、3個で満杯、4個目拒否の状態チェックに成功
+
 Task 5を完了しました。
 変更ファイル：
 - [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)

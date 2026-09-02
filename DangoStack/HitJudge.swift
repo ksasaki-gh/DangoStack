@@ -46,8 +46,21 @@ struct HitJudge {
         dangoX: CGFloat,
         skewerCenterXs: [CGFloat]
     ) -> CGFloat? {
-        skewerCenterXs.min(by: {
-            abs(dangoX - $0) < abs(dangoX - $1)
+        guard let index = nearestSkewerIndex(
+            dangoX: dangoX,
+            skewerCenterXs: skewerCenterXs
+        ) else { return nil }
+
+        return skewerCenterXs[index]
+    }
+
+    static func nearestSkewerIndex(
+        dangoX: CGFloat,
+        skewerCenterXs: [CGFloat]
+    ) -> Int? {
+        skewerCenterXs.indices.min(by: {
+            abs(dangoX - skewerCenterXs[$0])
+                < abs(dangoX - skewerCenterXs[$1])
         })
     }
 }

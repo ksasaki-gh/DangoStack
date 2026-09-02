@@ -55,6 +55,14 @@ final class DangoGameScene: SKScene {
         static let squashScaleY: CGFloat = 0.85
         static let squashDuration: TimeInterval = 0.05
         static let restoreDuration: TimeInterval = 0.08
+
+        static let underlyingSquashScaleY: CGFloat = 0.94
+        static let underlyingSquashDuration: TimeInterval = 0.05
+        static let underlyingRestoreDuration: TimeInterval = 0.08
+    }
+
+    private enum StackLayoutParameters {
+        static let dangoVerticalSpacing: CGFloat = 52
     }
 
     private enum DangoState {
@@ -64,12 +72,14 @@ final class DangoGameScene: SKScene {
     }
 
     private var skewers: [SKShapeNode] = []
+    private var skewerStates: [SkewerState] = []
     private var dango: SKShapeNode?
     private var dangoState = DangoState.movingHorizontally
     private var horizontalDirection: CGFloat = 1
     private var previousUpdateTime: TimeInterval?
     private var respawnTimeRemaining: TimeInterval = 0
     private var hasJudgedCurrentDango = false
+    private var nextDangoColorIndex = 0
 
     override init(size: CGSize) {
         super.init(size: size)
@@ -114,6 +124,9 @@ final class DangoGameScene: SKScene {
 
     private func configureScene() {
         backgroundColor = Appearance.backgroundColor
+        skewerStates = Layout.skewerXPositionRatios.map {
+            SkewerState(xPositionRatio: $0)
+        }
         addSkewers()
         layoutSkewers()
         spawnDango()
@@ -158,9 +171,10 @@ final class DangoGameScene: SKScene {
 
     private func spawnDango() {
         let radius = DangoParameters.diameter / 2
+        let dangoColor = nextDangoColor
         let newDango = SKShapeNode(circleOfRadius: radius)
-        newDango.fillColor = Appearance.dangoColor
-        newDango.strokeColor = Appearance.dangoColor
+        newDango.fillColor = spriteColor(for: dangoColor)
+        newDango.strokeColor = spriteColor(for: dangoColor)
         newDango.position = CGPoint(
             x: size.width * DangoParameters.spawnXRatio,
             y: size.height * DangoParameters.spawnYRatio
@@ -172,6 +186,7 @@ final class DangoGameScene: SKScene {
         dangoState = .movingHorizontally
         horizontalDirection = 1
         hasJudgedCurrentDango = false
+        advanceDangoColor()
     }
 
     private func layoutDangoForCurrentSceneSize() {
@@ -243,7 +258,7 @@ final class DangoGameScene: SKScene {
 
         hasJudgedCurrentDango = true
 
-        let skewerCenterXs = Layout.skewerXPositionRatios.map { size.width * $0 }
+        let skewerCenterXs = skewerStates.map { size.width * $0.xPositionRatio }
         let result = HitJudge.judge(
             dangoX: dango.position.x,
             dangoDiameter: DangoParameters.diameter,
@@ -256,24 +271,40 @@ final class DangoGameScene: SKScene {
             return
         }
 
-        guard let targetSkewerX = HitJudge.nearestSkewerCenterX(
+        guard let targetSkewerIndex = HitJudge.nearestSkewerIndex(
             dangoX: dango.position.x,
             skewerCenterXs: skewerCenterXs
         ) else { return }
 
-        stick(dango, result: result, targetSkewerX: targetSkewerX)
+        guard !skewerStates[targetSkewerIndex].isFull else {
+            print("[Stack] Skewer is full")
+            return
+        }
+
+        stick(
+            dango,
+            result: result,
+            targetSkewerIndex: targetSkewerIndex,
+            targetSkewerX: skewerCenterXs[targetSkewerIndex]
+        )
     }
 
     private func stick(
         _ dango: SKShapeNode,
         result: HitResult,
+        targetSkewerIndex: Int,
         targetSkewerX: CGFloat
     ) {
+        let stackLevel = skewerStates[targetSkewerIndex].dangoCount
+        let underlyingDango = skewerStates[targetSkewerIndex].dangoNodes.last
+        guard skewerStates[targetSkewerIndex].addDangoNode(dango) else { return }
+
         dangoState = .stuck
 
         let targetPosition = CGPoint(
             x: snappedX(for: result, skewerCenterX: targetSkewerX),
-            y: skewerTopY + LandingAnimationParameters.stuckCenterYOffset
+            y: stackedDangoY(for: stackLevel)
+                + LandingAnimationParameters.stuckCenterYOffset
         )
         let snapAction = SKAction.move(
             to: targetPosition,
@@ -306,7 +337,33 @@ final class DangoGameScene: SKScene {
         restoreAction.timingMode = .easeOut
 
         let puniAction = SKAction.sequence([squashAction, restoreAction])
-        dango.run(SKAction.group([snapAction, puniAction]))
+        let landingAction = SKAction.group([snapAction, puniAction])
+
+        if let underlyingDango {
+            animateUnderlyingDango(underlyingDango)
+        }
+
+        dango.run(landingAction) { [weak self, weak dango] in
+            guard let self, let dango, self.dango === dango else { return }
+            self.dango = nil
+            self.respawnTimeRemaining = DangoParameters.respawnDelay
+        }
+    }
+
+    private func animateUnderlyingDango(_ underlyingDango: SKShapeNode) {
+        let squashAction = SKAction.scaleY(
+            to: LandingAnimationParameters.underlyingSquashScaleY,
+            duration: LandingAnimationParameters.underlyingSquashDuration
+        )
+        squashAction.timingMode = .easeOut
+
+        let restoreAction = SKAction.scaleY(
+            to: 1,
+            duration: LandingAnimationParameters.underlyingRestoreDuration
+        )
+        restoreAction.timingMode = .easeOut
+
+        underlyingDango.run(SKAction.sequence([squashAction, restoreAction]))
     }
 
     private func snappedX(for result: HitResult, skewerCenterX: CGFloat) -> CGFloat {
@@ -320,6 +377,31 @@ final class DangoGameScene: SKScene {
         case .miss:
             return skewerCenterX
         }
+    }
+
+    private func stackedDangoY(for stackLevel: Int) -> CGFloat {
+        let levelsBelowTop = SkewerState.maximumDangoCount - 1 - stackLevel
+        return skewerTopY
+            - CGFloat(levelsBelowTop) * StackLayoutParameters.dangoVerticalSpacing
+    }
+
+    private func spriteColor(for dangoColor: DangoColor) -> SKColor {
+        switch dangoColor {
+        case .green:
+            return SKColor(red: 0.48, green: 0.72, blue: 0.40, alpha: 1.0)
+        case .white:
+            return SKColor(red: 0.98, green: 0.96, blue: 0.90, alpha: 1.0)
+        case .pink:
+            return Appearance.dangoColor
+        }
+    }
+
+    private var nextDangoColor: DangoColor {
+        DangoColor.stackOrder[nextDangoColorIndex]
+    }
+
+    private func advanceDangoColor() {
+        nextDangoColorIndex = (nextDangoColorIndex + 1) % DangoColor.stackOrder.count
     }
 
     private func debugText(for result: HitResult) -> String {

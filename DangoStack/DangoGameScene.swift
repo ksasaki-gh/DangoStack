@@ -86,6 +86,21 @@ final class DangoGameScene: SKScene {
         static let previewLineWidth: CGFloat = 1.5
     }
 
+    private enum StageClearDisplayParameters {
+        static let centerYRatio: CGFloat = 0.63
+        static let clearLabelFontSize: CGFloat = 38
+        static let retryLabelFontSize: CGFloat = 17
+        static let retryLabelYOffset: CGFloat = -52
+        static let revealDelay: TimeInterval = 0.35
+        static let revealDuration: TimeInterval = 0.20
+        static let initialScale: CGFloat = 0.92
+    }
+
+    private enum GameState {
+        case playing
+        case stageCleared
+    }
+
     private enum DangoState {
         case movingHorizontally
         case falling
@@ -98,9 +113,11 @@ final class DangoGameScene: SKScene {
     private var dango: SKShapeNode?
     private var nextLabelNode: SKLabelNode?
     private var nextPreviewNode: SKShapeNode?
+    private var stageClearNode: SKNode?
     private var dangoQueue = DangoQueue()
     private var currentDangoColor: DangoColor?
     private var nextDangoColor: DangoColor?
+    private var gameState = GameState.playing
     private var dangoState = DangoState.movingHorizontally
     private var horizontalDirection: CGFloat = 1
     private var previousUpdateTime: TimeInterval?
@@ -125,6 +142,11 @@ final class DangoGameScene: SKScene {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if case .stageCleared = gameState {
+            resetGame()
+            return
+        }
+
         guard dango != nil else { return }
 
         if case .movingHorizontally = dangoState {
@@ -133,6 +155,8 @@ final class DangoGameScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        guard case .playing = gameState else { return }
+
         defer { previousUpdateTime = currentTime }
 
         guard let previousUpdateTime else { return }
@@ -151,9 +175,33 @@ final class DangoGameScene: SKScene {
 
     private func configureScene() {
         backgroundColor = Appearance.backgroundColor
+        resetGame()
+    }
+
+    private func resetGame() {
+        removeAllActions()
+        children.forEach { $0.removeAllActions() }
+        removeAllChildren()
+
+        skewers.removeAll()
         skewerStates = Layout.skewerXPositionRatios.map {
             SkewerState(xPositionRatio: $0)
         }
+        dango = nil
+        nextLabelNode = nil
+        nextPreviewNode = nil
+        stageClearNode = nil
+
+        dangoQueue = DangoQueue()
+        currentDangoColor = nil
+        nextDangoColor = nil
+        gameState = .playing
+        dangoState = .movingHorizontally
+        horizontalDirection = 1
+        previousUpdateTime = nil
+        respawnTimeRemaining = 0
+        hasJudgedCurrentDango = false
+
         prepareInitialDangoColors()
         addSkewers()
         addNextDisplay()
@@ -474,8 +522,62 @@ final class DangoGameScene: SKScene {
         dango.run(landingAction) { [weak self, weak dango] in
             guard let self, let dango, self.dango === dango else { return }
             self.dango = nil
-            self.finishCurrentDango()
+
+            if self.isStageClear {
+                self.showStageClear()
+            } else {
+                self.finishCurrentDango()
+            }
         }
+    }
+
+    private func showStageClear() {
+        guard stageClearNode == nil else { return }
+
+        gameState = .stageCleared
+        nextLabelNode?.isHidden = true
+        nextPreviewNode?.isHidden = true
+
+        let container = SKNode()
+        container.position = CGPoint(
+            x: size.width / 2,
+            y: size.height * StageClearDisplayParameters.centerYRatio
+        )
+        container.zPosition = 20
+        container.alpha = 0
+        container.setScale(StageClearDisplayParameters.initialScale)
+        addChild(container)
+        stageClearNode = container
+
+        let clearLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        clearLabel.text = "STAGE CLEAR!"
+        clearLabel.fontSize = StageClearDisplayParameters.clearLabelFontSize
+        clearLabel.fontColor = Appearance.skewerColor
+        clearLabel.horizontalAlignmentMode = .center
+        clearLabel.verticalAlignmentMode = .center
+        container.addChild(clearLabel)
+
+        let retryLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
+        retryLabel.text = "TAP TO RETRY"
+        retryLabel.fontSize = StageClearDisplayParameters.retryLabelFontSize
+        retryLabel.fontColor = Appearance.skewerColor
+        retryLabel.horizontalAlignmentMode = .center
+        retryLabel.verticalAlignmentMode = .center
+        retryLabel.position.y = StageClearDisplayParameters.retryLabelYOffset
+        container.addChild(retryLabel)
+
+        let revealAction = SKAction.group([
+            SKAction.fadeIn(withDuration: StageClearDisplayParameters.revealDuration),
+            SKAction.scale(
+                to: 1,
+                duration: StageClearDisplayParameters.revealDuration
+            ),
+        ])
+        revealAction.timingMode = .easeOut
+        container.run(SKAction.sequence([
+            SKAction.wait(forDuration: StageClearDisplayParameters.revealDelay),
+            revealAction,
+        ]))
     }
 
     private func animateUnderlyingDango(_ underlyingDango: SKShapeNode) {
@@ -539,6 +641,11 @@ final class DangoGameScene: SKScene {
     private func updateNextDisplayColor() {
         guard let nextDangoColor else { return }
         nextPreviewNode?.fillColor = spriteColor(for: nextDangoColor)
+    }
+
+    private var isStageClear: Bool {
+        skewerStates.count == Layout.skewerXPositionRatios.count
+            && skewerStates.allSatisfy(\.isFull)
     }
 
     private func debugText(for result: HitResult) -> String {

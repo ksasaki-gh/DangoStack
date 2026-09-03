@@ -1,3 +1,23 @@
+Task 10を実装しました。3本すべてが完成するとゲームが停止し、STAGE CLEAR!とTAP TO RETRYが表示されます。
+変更ファイル：
+- [DangoGameScene.swift (line 89)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:89)
+  - playing / stageClearedのゲーム状態を追加。
+  - 最後の着弾アニメーション後、3本すべてのSkewerState.isFullを確認。
+  - クリア後は更新処理と新しい団子の生成を停止。
+  - NEXT表示を隠し、完成した3本を表示したままクリア表示をフェードイン。
+  - クリア後のタップで再プレイ可能。
+リセット処理は[resetGame() (line 181)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:181)にまとめています。ここで以下を初期化します。
+- 既存ノードと実行中アニメーション
+- 3本の串と刺さった団子
+- DangoQueue
+- Current／NEXT
+- ゲーム状態・団子状態
+- MISS／DISCARD判定状態とリスポーンタイマー
+毎回ノードを全削除してから作り直すため、Retryを繰り返しても串やNEXT表示は重複しません。
+確認結果：
+- iOS Simulator向けDebugビルド成功
+- Simulatorへのインストール・起動成功
+
 Task 9を実装しました。Bag方式による生成と、画面右上のNEXT表示が動作します。
 変更ファイル：
 - [DangoQueue.swift (line 6)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoQueue.swift:6)

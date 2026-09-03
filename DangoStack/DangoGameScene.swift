@@ -77,6 +77,15 @@ final class DangoGameScene: SKScene {
         static let labelDisplayDuration: TimeInterval = 0.45
     }
 
+    private enum NextDisplayParameters {
+        static let centerXRatio: CGFloat = 0.87
+        static let labelYRatio: CGFloat = 0.92
+        static let previewDiameter: CGFloat = 28
+        static let previewYOffset: CGFloat = 34
+        static let labelFontSize: CGFloat = 16
+        static let previewLineWidth: CGFloat = 1.5
+    }
+
     private enum DangoState {
         case movingHorizontally
         case falling
@@ -87,13 +96,16 @@ final class DangoGameScene: SKScene {
     private var skewers: [SKShapeNode] = []
     private var skewerStates: [SkewerState] = []
     private var dango: SKShapeNode?
-    private var activeDangoColor: DangoColor?
+    private var nextLabelNode: SKLabelNode?
+    private var nextPreviewNode: SKShapeNode?
+    private var dangoQueue = DangoQueue()
+    private var currentDangoColor: DangoColor?
+    private var nextDangoColor: DangoColor?
     private var dangoState = DangoState.movingHorizontally
     private var horizontalDirection: CGFloat = 1
     private var previousUpdateTime: TimeInterval?
     private var respawnTimeRemaining: TimeInterval = 0
     private var hasJudgedCurrentDango = false
-    private var nextDangoColorIndex = 0
 
     override init(size: CGSize) {
         super.init(size: size)
@@ -108,6 +120,7 @@ final class DangoGameScene: SKScene {
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
         layoutSkewers()
+        layoutNextDisplay()
         layoutDangoForCurrentSceneSize()
     }
 
@@ -141,8 +154,11 @@ final class DangoGameScene: SKScene {
         skewerStates = Layout.skewerXPositionRatios.map {
             SkewerState(xPositionRatio: $0)
         }
+        prepareInitialDangoColors()
         addSkewers()
+        addNextDisplay()
         layoutSkewers()
+        layoutNextDisplay()
         spawnDango()
     }
 
@@ -183,12 +199,45 @@ final class DangoGameScene: SKScene {
         }
     }
 
+    private func addNextDisplay() {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = "NEXT"
+        label.fontSize = NextDisplayParameters.labelFontSize
+        label.fontColor = Appearance.skewerColor
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+        label.zPosition = 10
+        addChild(label)
+        nextLabelNode = label
+
+        let previewRadius = NextDisplayParameters.previewDiameter / 2
+        let preview = SKShapeNode(circleOfRadius: previewRadius)
+        preview.strokeColor = Appearance.skewerColor
+        preview.lineWidth = NextDisplayParameters.previewLineWidth
+        preview.zPosition = 10
+        addChild(preview)
+        nextPreviewNode = preview
+
+        updateNextDisplayColor()
+    }
+
+    private func layoutNextDisplay() {
+        let centerX = size.width * NextDisplayParameters.centerXRatio
+        let labelY = size.height * NextDisplayParameters.labelYRatio
+        nextLabelNode?.position = CGPoint(x: centerX, y: labelY)
+        nextPreviewNode?.position = CGPoint(
+            x: centerX,
+            y: labelY - NextDisplayParameters.previewYOffset
+        )
+    }
+
     private func spawnDango() {
+        guard let currentDangoColor else { return }
+
         let radius = DangoParameters.diameter / 2
-        let dangoColor = nextDangoColor
         let newDango = SKShapeNode(circleOfRadius: radius)
-        newDango.fillColor = spriteColor(for: dangoColor)
-        newDango.strokeColor = spriteColor(for: dangoColor)
+        newDango.fillColor = spriteColor(for: currentDangoColor)
+        newDango.strokeColor = spriteColor(for: currentDangoColor)
         newDango.position = CGPoint(
             x: size.width * DangoParameters.spawnXRatio,
             y: size.height * DangoParameters.spawnYRatio
@@ -197,11 +246,9 @@ final class DangoGameScene: SKScene {
         addChild(newDango)
 
         dango = newDango
-        activeDangoColor = dangoColor
         dangoState = .movingHorizontally
         horizontalDirection = 1
         hasJudgedCurrentDango = false
-        advanceDangoColor()
     }
 
     private func layoutDangoForCurrentSceneSize() {
@@ -256,8 +303,7 @@ final class DangoGameScene: SKScene {
 
         dango.removeFromParent()
         self.dango = nil
-        activeDangoColor = nil
-        respawnTimeRemaining = DangoParameters.respawnDelay
+        finishCurrentDango()
     }
 
     private func updateRespawnTimer(frameDuration: TimeInterval) {
@@ -294,7 +340,7 @@ final class DangoGameScene: SKScene {
             skewerCenterXs: skewerCenterXs
         ) else { return }
 
-        guard let dangoColor = activeDangoColor else { return }
+        guard let dangoColor = currentDangoColor else { return }
         guard let requiredColor = skewerStates[targetSkewerIndex].nextRequiredColor else {
             print("[Landing] DISCARD: skewer is full")
             discard(dango, targetSkewerX: skewerCenterXs[targetSkewerIndex])
@@ -340,8 +386,7 @@ final class DangoGameScene: SKScene {
             guard let self, let dango, self.dango === dango else { return }
             dango.removeFromParent()
             self.dango = nil
-            self.activeDangoColor = nil
-            self.respawnTimeRemaining = DangoParameters.respawnDelay
+            self.finishCurrentDango()
         }
     }
 
@@ -429,8 +474,7 @@ final class DangoGameScene: SKScene {
         dango.run(landingAction) { [weak self, weak dango] in
             guard let self, let dango, self.dango === dango else { return }
             self.dango = nil
-            self.activeDangoColor = nil
-            self.respawnTimeRemaining = DangoParameters.respawnDelay
+            self.finishCurrentDango()
         }
     }
 
@@ -480,12 +524,21 @@ final class DangoGameScene: SKScene {
         }
     }
 
-    private var nextDangoColor: DangoColor {
-        DangoColor.stackOrder[nextDangoColorIndex]
+    private func prepareInitialDangoColors() {
+        currentDangoColor = dangoQueue.dequeue()
+        nextDangoColor = dangoQueue.dequeue()
     }
 
-    private func advanceDangoColor() {
-        nextDangoColorIndex = (nextDangoColorIndex + 1) % DangoColor.stackOrder.count
+    private func finishCurrentDango() {
+        currentDangoColor = nextDangoColor
+        nextDangoColor = dangoQueue.dequeue()
+        updateNextDisplayColor()
+        respawnTimeRemaining = DangoParameters.respawnDelay
+    }
+
+    private func updateNextDisplayColor() {
+        guard let nextDangoColor else { return }
+        nextPreviewNode?.fillColor = spriteColor(for: nextDangoColor)
     }
 
     private func debugText(for result: HitResult) -> String {

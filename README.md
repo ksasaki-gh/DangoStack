@@ -1,3 +1,24 @@
+Task 9を実装しました。Bag方式による生成と、画面右上のNEXT表示が動作します。
+変更ファイル：
+- [DangoQueue.swift (line 6)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoQueue.swift:6)
+  - green / white / pinkを各3個追加した9個のBagを生成。
+  - Bag生成時にシャッフル。
+  - 空になると次のBagを自動生成。
+- [DangoGameScene.swift (line 80)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:80)
+  - currentDangoColorとnextDangoColorを管理。
+  - 右上にNEXTラベルと直径28ptのプレビュー円を追加。
+  - NEXTの位置やサイズはNextDisplayParametersで調整可能。
+Current／Nextの更新は[finishCurrentDango() (line 532)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:532)へ共通化しました。
+- 正しく刺さったアニメーション完了後
+- DISCARDで画面外へ落ちた後
+- MISSで画面下へ落ちた後
+のいずれでも、nextをcurrentへ移し、Queueから新しいnextを取得して表示を更新します。
+確認結果：
+- 100個のBagを検証し、各Bagが常に3色×3個になることを確認
+- iOS Simulator向けDebugビルド成功
+- Simulatorへのインストール・起動成功
+- NEXT表示をSimulator画面で確認済み
+
 Task 8を実装しました。色違い・完成済みの串への着弾が正式にDISCARDとして処理されます。
 変更ファイル：
 - [DangoGameScene.swift (line 68)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:68)

@@ -1,3 +1,20 @@
+Task 8を実装しました。色違い・完成済みの串への着弾が正式にDISCARDとして処理されます。
+変更ファイル：
+- [DangoGameScene.swift (line 68)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:68)
+  - discarding状態を追加。
+  - 団子を少し横・上へ弾いたあと、画面外へ落とすアニメーションを追加。
+  - 着弾位置にDISCARDを表示し、上昇しながらフェードアウト。
+  - 色違いと完成済みの串を同じDISCARD処理へ接続。
+  - アニメーション値はDiscardAnimationParametersで調整可能。
+MISSとDISCARDの区別：
+- [HitJudge.swift (line 19)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift:19)が横位置のみを判定し、着弾範囲外ならMISS。
+- [DangoGameScene.swift (line 271)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:271)で、位置判定がPERFECT/GOODの場合だけ色を確認。
+- 色違いまたは完成済みならDISCARD、正しい色なら従来どおり串へ刺します。
+確認結果：
+- iOS Simulator向けDebugビルド成功
+- Simulatorへのインストール・起動成功
+- スコア・MISS回数・コンボ処理は追加していません。
+
 Task 7を実装しました。3本の串が独立して進行し、次に必要な色だけ刺さります。
 変更ファイル：
 - [DangoColor.swift (line 6)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoColor.swift:6)

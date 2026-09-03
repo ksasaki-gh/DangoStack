@@ -65,9 +65,22 @@ final class DangoGameScene: SKScene {
         static let dangoVerticalSpacing: CGFloat = 52
     }
 
+    private enum DiscardAnimationParameters {
+        static let horizontalKickDistance: CGFloat = 22
+        static let upwardKickDistance: CGFloat = 18
+        static let kickDuration: TimeInterval = 0.10
+        static let fallDuration: TimeInterval = 0.42
+
+        static let labelFontSize: CGFloat = 16
+        static let labelYOffset: CGFloat = 42
+        static let labelRiseDistance: CGFloat = 16
+        static let labelDisplayDuration: TimeInterval = 0.45
+    }
+
     private enum DangoState {
         case movingHorizontally
         case falling
+        case discarding
         case stuck
     }
 
@@ -211,6 +224,8 @@ final class DangoGameScene: SKScene {
             updateHorizontalMovement(of: dango, frameDuration: frameDuration)
         case .falling:
             updateFallingMovement(of: dango, frameDuration: frameDuration)
+        case .discarding:
+            break
         case .stuck:
             break
         }
@@ -281,15 +296,17 @@ final class DangoGameScene: SKScene {
 
         guard let dangoColor = activeDangoColor else { return }
         guard let requiredColor = skewerStates[targetSkewerIndex].nextRequiredColor else {
-            print("[Stack] Skewer is full")
+            print("[Landing] DISCARD: skewer is full")
+            discard(dango, targetSkewerX: skewerCenterXs[targetSkewerIndex])
             return
         }
 
         guard dangoColor == requiredColor else {
             print(
-                "[Stack] Color mismatch: \(dangoColor.rawValue), "
+                "[Landing] DISCARD: \(dangoColor.rawValue), "
                     + "required: \(requiredColor.rawValue)"
             )
+            discard(dango, targetSkewerX: skewerCenterXs[targetSkewerIndex])
             return
         }
 
@@ -299,6 +316,60 @@ final class DangoGameScene: SKScene {
             targetSkewerIndex: targetSkewerIndex,
             targetSkewerX: skewerCenterXs[targetSkewerIndex]
         )
+    }
+
+    private func discard(_ dango: SKShapeNode, targetSkewerX: CGFloat) {
+        dangoState = .discarding
+        showDiscardLabel(at: dango.position)
+
+        let kickDirection: CGFloat = dango.position.x < targetSkewerX ? -1 : 1
+        let kickAction = SKAction.moveBy(
+            x: DiscardAnimationParameters.horizontalKickDistance * kickDirection,
+            y: DiscardAnimationParameters.upwardKickDistance,
+            duration: DiscardAnimationParameters.kickDuration
+        )
+        kickAction.timingMode = .easeOut
+
+        let fallAction = SKAction.moveTo(
+            y: -DangoParameters.diameter,
+            duration: DiscardAnimationParameters.fallDuration
+        )
+        fallAction.timingMode = .easeIn
+
+        dango.run(SKAction.sequence([kickAction, fallAction])) { [weak self, weak dango] in
+            guard let self, let dango, self.dango === dango else { return }
+            dango.removeFromParent()
+            self.dango = nil
+            self.activeDangoColor = nil
+            self.respawnTimeRemaining = DangoParameters.respawnDelay
+        }
+    }
+
+    private func showDiscardLabel(at position: CGPoint) {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = "DISCARD"
+        label.fontSize = DiscardAnimationParameters.labelFontSize
+        label.fontColor = SKColor(red: 0.72, green: 0.20, blue: 0.18, alpha: 1.0)
+        label.verticalAlignmentMode = .center
+        label.position = CGPoint(
+            x: position.x,
+            y: position.y + DiscardAnimationParameters.labelYOffset
+        )
+        label.zPosition = 10
+        addChild(label)
+
+        let fadeAction = SKAction.fadeOut(
+            withDuration: DiscardAnimationParameters.labelDisplayDuration
+        )
+        let riseAction = SKAction.moveBy(
+            x: 0,
+            y: DiscardAnimationParameters.labelRiseDistance,
+            duration: DiscardAnimationParameters.labelDisplayDuration
+        )
+        label.run(SKAction.sequence([
+            SKAction.group([fadeAction, riseAction]),
+            SKAction.removeFromParent(),
+        ]))
     }
 
     private func stick(

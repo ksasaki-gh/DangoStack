@@ -1,3 +1,18 @@
+Task 12を実装しました。ビルド成功およびiPhone Simulatorでの起動・HUD表示を確認済みです。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+主な変更：
+- missCountとwrongCountで個別回数を管理し、totalFailureCountで合計を算出。
+- finishFailedDango(_:)に失敗処理を集約。
+- MISS／WRONGごとに失敗を1加算。PERFECT／GOODでは加算しません。
+- 画面下部に3個の丸による失敗HUDを追加。
+- 合計3回でstageFailedへ遷移し、STAGE FAILEDとTAP TO RETRYを表示。
+- FAILED後は更新・操作・団子再生成・CURRENT/NEXT進行を停止。
+- MISS／WRONG後、3回未満なら従来どおり同じCURRENTとNEXTを維持して再挑戦。
+- resetGame()で失敗回数、HUD、結果表示、串、団子、CURRENT/NEXTを完全に再初期化。
+- STAGE CLEAR後のRetryも共通のリセット処理で維持。
+最大失敗回数やHUDの位置・サイズは、ファイル上部のFailureParametersで調整できます。
+
 Task 11.1を実装しました。NEXTは「CURRENT成功後に登場する団子」として計算されます。
 変更ファイル：
 - [DangoGenerator.swift (line 11)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGenerator.swift:11)

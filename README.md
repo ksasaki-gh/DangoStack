@@ -1,3 +1,51 @@
+Task 11.1を実装しました。NEXTは「CURRENT成功後に登場する団子」として計算されます。
+変更ファイル：
+- [DangoGenerator.swift (line 11)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGenerator.swift:11)
+  - NEXT計算からMISS／WRONG時の盤面を除外。
+  - CURRENTを置ける全串について成功後の盤面をシミュレーション。
+  - 各成功後に必要な色の共通部分からNEXTを選択。
+  - 成功でSTAGE CLEARになる場合はNEXTを生成しません。
+- [DangoGameScene.swift (line 657)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:657)
+  - CURRENT／NEXTを進める処理をadvanceAfterSuccessfulDango()へ分離。
+  - 正しいPERFECT／GOODの着弾アニメーション完了時だけNEXTをCURRENTへ繰り上げます。
+  - STAGE CLEAR時は従来どおり繰り上げません。
+MISS／WRONG時は[finishFailedDango() (line 675)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:675)を通ります。この処理はリスポーンタイマーだけを設定し、currentDangoColorとnextDangoColorを変更しません。そのため、[spawnDango() (line 283)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:283)から同じCURRENTが再生成され、NEXT表示も変わりません。
+確認結果：
+- 111通りの「盤面×CURRENT」で、NEXTがすべての成功配置後に使用可能であることを確認
+- STAGE CLEARとなる配置ではNEXTが生成されないことを確認
+- iOS Simulator向けDebugビルド成功
+- Simulatorで更新版の起動成功
+既存のSTAGE CLEAR、Retry、WRONG／MISS、スナップ・ぷにっ演出は維持しています。
+
+Task 11を実装しました。Bag方式を廃止し、盤面状態からCURRENT／NEXTを生成する方式へ変更しています。
+変更ファイル：
+- 追加：[DangoGenerator.swift (line 6)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGenerator.swift:6)
+- 変更：[DangoGameScene.swift (line 68)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:68)
+- 削除：DangoQueue.swift
+CURRENTの生成：
+- 3本のnextRequiredColorを取得。
+- 重複を除いた「現在必要な色」からランダムに選択します。
+- 完成済みの串は候補に含まれないため、CURRENTは必ず現在どこかで使用可能です。
+NEXTの安全性：
+[DangoGenerator.generateSafeNextColor() (line 11)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGenerator.swift:11)で以下を行います。
+1. 現在必要な色を取得。
+2. CURRENTを受け付ける全串を列挙。
+3. 各串へ刺した後の必要色を個別にシミュレーション。
+4. 現在盤面と全シミュレーション後の必要色を交差。
+5. 共通候補からNEXTをランダム選択。
+MISS／WRONG／正常着弾後は[DangoGameScene.swift (line 657)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:657)で表示済みNEXTをCURRENTへ繰り上げ、更新後の盤面から新しいNEXTを計算します。STAGE CLEAR時は新しいNEXTを生成しません。
+MISSとWRONGの区別：
+- [MISS判定 (line 370)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:370)：HitJudgeが着弾範囲外と判断。
+- [WRONG判定 (line 396)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:396)：着弾範囲内だが色違い、または完成済み。
+- WRONGではWRONG表示と弾きアニメーションを行い、串状態は変更しません。
+- 両方とも[finishFailedDango() (line 675)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:675)へ集約し、次Taskで失敗回数を追加しやすくしています。
+確認結果：
+- Bag／DISCARD関連コードが残っていないことを確認
+- 全63種類の非クリア盤面状態で生成ロジックを検証
+- Simulator向けDebugビルド成功
+- SimulatorでCURRENT／NEXT表示と起動を確認
+なお、安全候補が空になる盤面では指定どおり現在盤面の使用可能色へフォールバックします。特に未完成の串が1本だけでgreen→whiteまたはwhite→pinkへ進む場合、単一のNEXT色で「MISS時の盤面」と「成功後の盤面」の両方を満たすことは数学的に不可能なため、このフォールバックが適用されます。
+
 Task 10を実装しました。3本すべてが完成するとゲームが停止し、STAGE CLEAR!とTAP TO RETRYが表示されます。
 変更ファイル：
 - [DangoGameScene.swift (line 89)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:89)

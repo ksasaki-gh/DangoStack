@@ -65,7 +65,7 @@ final class DangoGameScene: SKScene {
         static let dangoVerticalSpacing: CGFloat = 52
     }
 
-    private enum DiscardAnimationParameters {
+    private enum WrongAnimationParameters {
         static let horizontalKickDistance: CGFloat = 22
         static let upwardKickDistance: CGFloat = 18
         static let kickDuration: TimeInterval = 0.10
@@ -104,8 +104,13 @@ final class DangoGameScene: SKScene {
     private enum DangoState {
         case movingHorizontally
         case falling
-        case discarding
+        case wrong
         case stuck
+    }
+
+    private enum FailureKind: String {
+        case miss = "MISS"
+        case wrong = "WRONG"
     }
 
     private var skewers: [SKShapeNode] = []
@@ -114,7 +119,7 @@ final class DangoGameScene: SKScene {
     private var nextLabelNode: SKLabelNode?
     private var nextPreviewNode: SKShapeNode?
     private var stageClearNode: SKNode?
-    private var dangoQueue = DangoQueue()
+    private var dangoGenerator = DangoGenerator()
     private var currentDangoColor: DangoColor?
     private var nextDangoColor: DangoColor?
     private var gameState = GameState.playing
@@ -192,7 +197,7 @@ final class DangoGameScene: SKScene {
         nextPreviewNode = nil
         stageClearNode = nil
 
-        dangoQueue = DangoQueue()
+        dangoGenerator = DangoGenerator()
         currentDangoColor = nil
         nextDangoColor = nil
         gameState = .playing
@@ -319,7 +324,7 @@ final class DangoGameScene: SKScene {
             updateHorizontalMovement(of: dango, frameDuration: frameDuration)
         case .falling:
             updateFallingMovement(of: dango, frameDuration: frameDuration)
-        case .discarding:
+        case .wrong:
             break
         case .stuck:
             break
@@ -351,7 +356,7 @@ final class DangoGameScene: SKScene {
 
         dango.removeFromParent()
         self.dango = nil
-        finishCurrentDango()
+        finishFailedDango(.miss)
     }
 
     private func updateRespawnTimer(frameDuration: TimeInterval) {
@@ -390,17 +395,23 @@ final class DangoGameScene: SKScene {
 
         guard let dangoColor = currentDangoColor else { return }
         guard let requiredColor = skewerStates[targetSkewerIndex].nextRequiredColor else {
-            print("[Landing] DISCARD: skewer is full")
-            discard(dango, targetSkewerX: skewerCenterXs[targetSkewerIndex])
+            print("[Landing] WRONG: skewer is full")
+            handleWrongLanding(
+                dango,
+                targetSkewerX: skewerCenterXs[targetSkewerIndex]
+            )
             return
         }
 
         guard dangoColor == requiredColor else {
             print(
-                "[Landing] DISCARD: \(dangoColor.rawValue), "
+                "[Landing] WRONG: \(dangoColor.rawValue), "
                     + "required: \(requiredColor.rawValue)"
             )
-            discard(dango, targetSkewerX: skewerCenterXs[targetSkewerIndex])
+            handleWrongLanding(
+                dango,
+                targetSkewerX: skewerCenterXs[targetSkewerIndex]
+            )
             return
         }
 
@@ -412,21 +423,21 @@ final class DangoGameScene: SKScene {
         )
     }
 
-    private func discard(_ dango: SKShapeNode, targetSkewerX: CGFloat) {
-        dangoState = .discarding
-        showDiscardLabel(at: dango.position)
+    private func handleWrongLanding(_ dango: SKShapeNode, targetSkewerX: CGFloat) {
+        dangoState = .wrong
+        showWrongLabel(at: dango.position)
 
         let kickDirection: CGFloat = dango.position.x < targetSkewerX ? -1 : 1
         let kickAction = SKAction.moveBy(
-            x: DiscardAnimationParameters.horizontalKickDistance * kickDirection,
-            y: DiscardAnimationParameters.upwardKickDistance,
-            duration: DiscardAnimationParameters.kickDuration
+            x: WrongAnimationParameters.horizontalKickDistance * kickDirection,
+            y: WrongAnimationParameters.upwardKickDistance,
+            duration: WrongAnimationParameters.kickDuration
         )
         kickAction.timingMode = .easeOut
 
         let fallAction = SKAction.moveTo(
             y: -DangoParameters.diameter,
-            duration: DiscardAnimationParameters.fallDuration
+            duration: WrongAnimationParameters.fallDuration
         )
         fallAction.timingMode = .easeIn
 
@@ -434,30 +445,30 @@ final class DangoGameScene: SKScene {
             guard let self, let dango, self.dango === dango else { return }
             dango.removeFromParent()
             self.dango = nil
-            self.finishCurrentDango()
+            self.finishFailedDango(.wrong)
         }
     }
 
-    private func showDiscardLabel(at position: CGPoint) {
+    private func showWrongLabel(at position: CGPoint) {
         let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        label.text = "DISCARD"
-        label.fontSize = DiscardAnimationParameters.labelFontSize
+        label.text = "WRONG"
+        label.fontSize = WrongAnimationParameters.labelFontSize
         label.fontColor = SKColor(red: 0.72, green: 0.20, blue: 0.18, alpha: 1.0)
         label.verticalAlignmentMode = .center
         label.position = CGPoint(
             x: position.x,
-            y: position.y + DiscardAnimationParameters.labelYOffset
+            y: position.y + WrongAnimationParameters.labelYOffset
         )
         label.zPosition = 10
         addChild(label)
 
         let fadeAction = SKAction.fadeOut(
-            withDuration: DiscardAnimationParameters.labelDisplayDuration
+            withDuration: WrongAnimationParameters.labelDisplayDuration
         )
         let riseAction = SKAction.moveBy(
             x: 0,
-            y: DiscardAnimationParameters.labelRiseDistance,
-            duration: DiscardAnimationParameters.labelDisplayDuration
+            y: WrongAnimationParameters.labelRiseDistance,
+            duration: WrongAnimationParameters.labelDisplayDuration
         )
         label.run(SKAction.sequence([
             SKAction.group([fadeAction, riseAction]),
@@ -526,7 +537,7 @@ final class DangoGameScene: SKScene {
             if self.isStageClear {
                 self.showStageClear()
             } else {
-                self.finishCurrentDango()
+                self.advanceAfterSuccessfulDango()
             }
         }
     }
@@ -627,20 +638,57 @@ final class DangoGameScene: SKScene {
     }
 
     private func prepareInitialDangoColors() {
-        currentDangoColor = dangoQueue.dequeue()
-        nextDangoColor = dangoQueue.dequeue()
+        let requiredColors = skewerRequiredColors
+        currentDangoColor = dangoGenerator.generateCurrentColor(
+            requiredColors: requiredColors
+        )
+
+        guard let currentDangoColor else {
+            nextDangoColor = nil
+            return
+        }
+
+        nextDangoColor = dangoGenerator.generateSafeNextColor(
+            currentColor: currentDangoColor,
+            requiredColors: requiredColors
+        )
     }
 
-    private func finishCurrentDango() {
+    private func advanceAfterSuccessfulDango() {
+        let requiredColors = skewerRequiredColors
         currentDangoColor = nextDangoColor
-        nextDangoColor = dangoQueue.dequeue()
+            ?? dangoGenerator.generateCurrentColor(requiredColors: requiredColors)
+
+        if let currentDangoColor {
+            nextDangoColor = dangoGenerator.generateSafeNextColor(
+                currentColor: currentDangoColor,
+                requiredColors: requiredColors
+            )
+        } else {
+            nextDangoColor = nil
+        }
+
         updateNextDisplayColor()
         respawnTimeRemaining = DangoParameters.respawnDelay
     }
 
+    private func finishFailedDango(_ failureKind: FailureKind) {
+        print("[Failure] \(failureKind.rawValue)")
+        respawnTimeRemaining = DangoParameters.respawnDelay
+    }
+
     private func updateNextDisplayColor() {
-        guard let nextDangoColor else { return }
+        guard let nextDangoColor else {
+            nextPreviewNode?.isHidden = true
+            return
+        }
+
+        nextPreviewNode?.isHidden = false
         nextPreviewNode?.fillColor = spriteColor(for: nextDangoColor)
+    }
+
+    private var skewerRequiredColors: [DangoColor?] {
+        skewerStates.map(\.nextRequiredColor)
     }
 
     private var isStageClear: Bool {

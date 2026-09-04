@@ -3,6 +3,7 @@
 //  DangoStack
 //
 
+import Foundation
 import SpriteKit
 
 final class DangoGameScene: SKScene {
@@ -87,10 +88,14 @@ final class DangoGameScene: SKScene {
     }
 
     private enum StageResultDisplayParameters {
-        static let centerYRatio: CGFloat = 0.63
+        static let centerYRatio: CGFloat = 0.68
         static let titleLabelFontSize: CGFloat = 38
+        static let detailLabelFontSize: CGFloat = 15
+        static let detailFirstYOffset: CGFloat = -48
+        static let detailLineSpacing: CGFloat = 22
         static let retryLabelFontSize: CGFloat = 17
         static let retryLabelYOffset: CGFloat = -52
+        static let detailedRetryLabelYOffset: CGFloat = -218
         static let revealDelay: TimeInterval = 0.35
         static let revealDuration: TimeInterval = 0.20
         static let initialScale: CGFloat = 0.92
@@ -108,6 +113,32 @@ final class DangoGameScene: SKScene {
             blue: 0.18,
             alpha: 1.0
         )
+    }
+
+    private enum ScoreParameters {
+        static let goodBaseScore = 100
+        static let perfectBaseScore = 150
+        static let perfectDangoBonus = 300
+        static let baseComboMultiplier = 1.0
+        static let comboMultiplierStep = 0.1
+        static let maximumCombo = 9
+    }
+
+    private enum ScoreHUDParameters {
+        static let leadingXRatio: CGFloat = 0.06
+        static let scoreYRatio: CGFloat = 0.92
+        static let comboYOffset: CGFloat = 28
+        static let scoreFontSize: CGFloat = 18
+        static let comboFontSize: CGFloat = 15
+    }
+
+    private enum PerfectDangoDisplayParameters {
+        static let titleFontSize: CGFloat = 16
+        static let bonusFontSize: CGFloat = 15
+        static let centerYOffset: CGFloat = 76
+        static let bonusYOffset: CGFloat = -21
+        static let riseDistance: CGFloat = 18
+        static let displayDuration: TimeInterval = 0.65
     }
 
     private enum GameState {
@@ -134,6 +165,8 @@ final class DangoGameScene: SKScene {
     private var nextLabelNode: SKLabelNode?
     private var nextPreviewNode: SKShapeNode?
     private var failureIndicatorNodes: [SKShapeNode] = []
+    private var scoreLabelNode: SKLabelNode?
+    private var comboLabelNode: SKLabelNode?
     private var stageResultNode: SKNode?
     private var dangoGenerator = DangoGenerator()
     private var currentDangoColor: DangoColor?
@@ -146,6 +179,12 @@ final class DangoGameScene: SKScene {
     private var hasJudgedCurrentDango = false
     private var missCount = 0
     private var wrongCount = 0
+    private var score = 0
+    private var combo = 0
+    private var maxCombo = 0
+    private var perfectCount = 0
+    private var goodCount = 0
+    private var perfectDangoCount = 0
 
     override init(size: CGSize) {
         super.init(size: size)
@@ -162,6 +201,7 @@ final class DangoGameScene: SKScene {
         layoutSkewers()
         layoutNextDisplay()
         layoutFailureHUD()
+        layoutScoreHUD()
         layoutDangoForCurrentSceneSize()
     }
 
@@ -220,6 +260,8 @@ final class DangoGameScene: SKScene {
         nextLabelNode = nil
         nextPreviewNode = nil
         failureIndicatorNodes.removeAll()
+        scoreLabelNode = nil
+        comboLabelNode = nil
         stageResultNode = nil
 
         dangoGenerator = DangoGenerator()
@@ -233,14 +275,22 @@ final class DangoGameScene: SKScene {
         hasJudgedCurrentDango = false
         missCount = 0
         wrongCount = 0
+        score = 0
+        combo = 0
+        maxCombo = 0
+        perfectCount = 0
+        goodCount = 0
+        perfectDangoCount = 0
 
         prepareInitialDangoColors()
         addSkewers()
         addNextDisplay()
         addFailureHUD()
+        addScoreHUD()
         layoutSkewers()
         layoutNextDisplay()
         layoutFailureHUD()
+        layoutScoreHUD()
         spawnDango()
     }
 
@@ -350,6 +400,44 @@ final class DangoGameScene: SKScene {
                 ? FailureParameters.failedColor
                 : Appearance.skewerColor
         }
+    }
+
+    private func addScoreHUD() {
+        let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        scoreLabel.fontSize = ScoreHUDParameters.scoreFontSize
+        scoreLabel.fontColor = Appearance.skewerColor
+        scoreLabel.horizontalAlignmentMode = .left
+        scoreLabel.verticalAlignmentMode = .center
+        scoreLabel.zPosition = 10
+        addChild(scoreLabel)
+        scoreLabelNode = scoreLabel
+
+        let comboLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        comboLabel.fontSize = ScoreHUDParameters.comboFontSize
+        comboLabel.fontColor = Appearance.skewerColor
+        comboLabel.horizontalAlignmentMode = .left
+        comboLabel.verticalAlignmentMode = .center
+        comboLabel.zPosition = 10
+        addChild(comboLabel)
+        comboLabelNode = comboLabel
+
+        updateScoreHUD()
+    }
+
+    private func layoutScoreHUD() {
+        let leadingX = size.width * ScoreHUDParameters.leadingXRatio
+        let scoreY = size.height * ScoreHUDParameters.scoreYRatio
+        scoreLabelNode?.position = CGPoint(x: leadingX, y: scoreY)
+        comboLabelNode?.position = CGPoint(
+            x: leadingX,
+            y: scoreY - ScoreHUDParameters.comboYOffset
+        )
+    }
+
+    private func updateScoreHUD() {
+        scoreLabelNode?.text = "SCORE \(formattedScore)"
+        comboLabelNode?.text = "COMBO ×\(combo)"
+        comboLabelNode?.isHidden = combo < 2
     }
 
     private func spawnDango() {
@@ -552,7 +640,23 @@ final class DangoGameScene: SKScene {
     ) {
         let stackLevel = skewerStates[targetSkewerIndex].dangoCount
         let underlyingDango = skewerStates[targetSkewerIndex].dangoNodes.last
-        guard skewerStates[targetSkewerIndex].addDangoNode(dango) else { return }
+        let wasPerfect: Bool
+        if case .perfect = result {
+            wasPerfect = true
+        } else {
+            wasPerfect = false
+        }
+
+        guard skewerStates[targetSkewerIndex].addDangoNode(
+            dango,
+            wasPerfect: wasPerfect
+        ) else { return }
+
+        recordSuccessfulLanding(
+            result,
+            targetSkewerIndex: targetSkewerIndex,
+            targetSkewerX: targetSkewerX
+        )
 
         dangoState = .stuck
 
@@ -612,7 +716,11 @@ final class DangoGameScene: SKScene {
 
     private func showStageClear() {
         gameState = .stageCleared
-        showStageResult(title: "STAGE CLEAR!", titleColor: Appearance.skewerColor)
+        showStageResult(
+            title: "STAGE CLEAR!",
+            titleColor: Appearance.skewerColor,
+            detailLines: stageClearSummaryLines
+        )
     }
 
     private func showStageFailed() {
@@ -620,7 +728,11 @@ final class DangoGameScene: SKScene {
         showStageResult(title: "STAGE FAILED", titleColor: FailureParameters.failedColor)
     }
 
-    private func showStageResult(title: String, titleColor: SKColor) {
+    private func showStageResult(
+        title: String,
+        titleColor: SKColor,
+        detailLines: [String] = []
+    ) {
         guard stageResultNode == nil else { return }
 
         nextLabelNode?.isHidden = true
@@ -645,13 +757,27 @@ final class DangoGameScene: SKScene {
         titleLabel.verticalAlignmentMode = .center
         container.addChild(titleLabel)
 
+        for (index, text) in detailLines.enumerated() {
+            let detailLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
+            detailLabel.text = text
+            detailLabel.fontSize = StageResultDisplayParameters.detailLabelFontSize
+            detailLabel.fontColor = Appearance.skewerColor
+            detailLabel.horizontalAlignmentMode = .center
+            detailLabel.verticalAlignmentMode = .center
+            detailLabel.position.y = StageResultDisplayParameters.detailFirstYOffset
+                - CGFloat(index) * StageResultDisplayParameters.detailLineSpacing
+            container.addChild(detailLabel)
+        }
+
         let retryLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
         retryLabel.text = "TAP TO RETRY"
         retryLabel.fontSize = StageResultDisplayParameters.retryLabelFontSize
         retryLabel.fontColor = Appearance.skewerColor
         retryLabel.horizontalAlignmentMode = .center
         retryLabel.verticalAlignmentMode = .center
-        retryLabel.position.y = StageResultDisplayParameters.retryLabelYOffset
+        retryLabel.position.y = detailLines.isEmpty
+            ? StageResultDisplayParameters.retryLabelYOffset
+            : StageResultDisplayParameters.detailedRetryLabelYOffset
         container.addChild(retryLabel)
 
         let revealAction = SKAction.group([
@@ -665,6 +791,79 @@ final class DangoGameScene: SKScene {
         container.run(SKAction.sequence([
             SKAction.wait(forDuration: StageResultDisplayParameters.revealDelay),
             revealAction,
+        ]))
+    }
+
+    private func recordSuccessfulLanding(
+        _ result: HitResult,
+        targetSkewerIndex: Int,
+        targetSkewerX: CGFloat
+    ) {
+        let baseScore: Int
+        switch result {
+        case .perfect:
+            perfectCount += 1
+            baseScore = ScoreParameters.perfectBaseScore
+        case .goodLeft, .goodRight:
+            goodCount += 1
+            baseScore = ScoreParameters.goodBaseScore
+        case .miss:
+            return
+        }
+
+        combo = min(combo + 1, ScoreParameters.maximumCombo)
+        maxCombo = max(maxCombo, combo)
+
+        let multiplier = ScoreParameters.baseComboMultiplier
+            + Double(combo - 1) * ScoreParameters.comboMultiplierStep
+        score += Int((Double(baseScore) * multiplier).rounded())
+
+        if skewerStates[targetSkewerIndex].isPerfectDango {
+            score += ScoreParameters.perfectDangoBonus
+            perfectDangoCount += 1
+            showPerfectDangoLabel(atX: targetSkewerX)
+        }
+
+        updateScoreHUD()
+    }
+
+    private func showPerfectDangoLabel(atX xPosition: CGFloat) {
+        let container = SKNode()
+        container.position = CGPoint(
+            x: xPosition,
+            y: skewerTopY + PerfectDangoDisplayParameters.centerYOffset
+        )
+        container.zPosition = 15
+        addChild(container)
+
+        let titleLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        titleLabel.text = "PERFECT DANGO!"
+        titleLabel.fontSize = PerfectDangoDisplayParameters.titleFontSize
+        titleLabel.fontColor = Appearance.skewerColor
+        titleLabel.horizontalAlignmentMode = .center
+        titleLabel.verticalAlignmentMode = .center
+        container.addChild(titleLabel)
+
+        let bonusLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        bonusLabel.text = "+\(ScoreParameters.perfectDangoBonus)"
+        bonusLabel.fontSize = PerfectDangoDisplayParameters.bonusFontSize
+        bonusLabel.fontColor = Appearance.skewerColor
+        bonusLabel.horizontalAlignmentMode = .center
+        bonusLabel.verticalAlignmentMode = .center
+        bonusLabel.position.y = PerfectDangoDisplayParameters.bonusYOffset
+        container.addChild(bonusLabel)
+
+        let duration = PerfectDangoDisplayParameters.displayDuration
+        container.run(SKAction.sequence([
+            SKAction.group([
+                SKAction.fadeOut(withDuration: duration),
+                SKAction.moveBy(
+                    x: 0,
+                    y: PerfectDangoDisplayParameters.riseDistance,
+                    duration: duration
+                ),
+            ]),
+            SKAction.removeFromParent(),
         ]))
     }
 
@@ -761,7 +960,9 @@ final class DangoGameScene: SKScene {
             "[Failure] \(failureKind.rawValue): "
                 + "\(totalFailureCount)/\(FailureParameters.maximumCount)"
         )
+        combo = 0
         updateFailureHUD()
+        updateScoreHUD()
 
         if totalFailureCount >= FailureParameters.maximumCount {
             showStageFailed()
@@ -786,6 +987,22 @@ final class DangoGameScene: SKScene {
 
     private var totalFailureCount: Int {
         missCount + wrongCount
+    }
+
+    private var formattedScore: String {
+        String(format: "%04d", score)
+    }
+
+    private var stageClearSummaryLines: [String] {
+        [
+            "SCORE \(formattedScore)",
+            "PERFECT \(perfectCount)",
+            "GOOD \(goodCount)",
+            "MISS \(missCount)",
+            "WRONG \(wrongCount)",
+            "MAX COMBO \(maxCombo)",
+            "PERFECT DANGO \(perfectDangoCount)",
+        ]
     }
 
     private var isStageClear: Bool {

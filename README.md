@@ -1,3 +1,24 @@
+Task 13を実装しました。Xcodeビルド成功、iPhone Simulatorで起動とHUD表示を確認済みです。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+  - SCORE／COMBO／MAX COMBOと各判定回数を管理。
+  - PERFECTは150点、GOODは100点に現在コンボ倍率を適用。
+  - MISS／WRONGでコンボを0へリセット。
+  - 左上にSCORE 0000、2コンボ以上でCOMBO ×nを表示。
+  - PERFECT DANGO成立時に300点を加算し、一時表示を追加。
+  - STAGE CLEAR画面に各評価値を表示。
+  - Retry時にすべてのスコア・評価情報を初期化。
+- [SkewerState.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SkewerState.swift)
+  - 各団子がPERFECTだったかをperfectJudgementsで保持。
+  - 3個すべてPERFECTの場合のみisPerfectDangoが成立。
+調整値は[DangoGameScene.swift (line 118)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:118)のScoreParametersにあります。
+- goodBaseScore：GOOD基本点
+- perfectBaseScore：PERFECT基本点
+- perfectDangoBonus：PERFECT DANGOボーナス
+- baseComboMultiplier：1コンボ時の倍率
+- comboMultiplierStep：コンボごとの倍率増加量
+- maximumCombo：最大コンボ数
+
 Task 12を実装しました。ビルド成功およびiPhone Simulatorでの起動・HUD表示を確認済みです。
 変更ファイル：
 - [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)

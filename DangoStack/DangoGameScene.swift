@@ -3,8 +3,8 @@
 //  DangoStack
 //
 
-import Foundation
 import SpriteKit
+import UIKit
 
 final class DangoGameScene: SKScene {
     private enum Appearance {
@@ -26,6 +26,18 @@ final class DangoGameScene: SKScene {
             blue: 0.62,
             alpha: 1.0
         )
+        static let perfectFeedbackColor = SKColor(
+            red: 0.84,
+            green: 0.35,
+            blue: 0.16,
+            alpha: 1.0
+        )
+        static let missFeedbackColor = SKColor(
+            red: 0.43,
+            green: 0.38,
+            blue: 0.34,
+            alpha: 1.0
+        )
     }
 
     private enum Layout {
@@ -39,7 +51,12 @@ final class DangoGameScene: SKScene {
         static let diameter: CGFloat = 56
         static let horizontalSpeed: CGFloat = 140
         static let horizontalRangeRatios: ClosedRange<CGFloat> = 0.18...0.82
-        static let fallingSpeed: CGFloat = 380
+        static let tapSquashScaleX: CGFloat = 1.16
+        static let tapSquashScaleY: CGFloat = 0.82
+        static let tapSquashDuration: TimeInterval = 0.08
+        static let initialFallSpeed: CGFloat = 0
+        static let fallAcceleration: CGFloat = 1350
+        static let maximumFallSpeed: CGFloat = 975
 
         static let spawnXRatio: CGFloat = 0.5
         static let spawnYRatio: CGFloat = 0.82
@@ -52,12 +69,22 @@ final class DangoGameScene: SKScene {
         static let stuckCenterYOffset: CGFloat = 0
         static let snapDuration: TimeInterval = 0.08
 
-        static let squashScaleX: CGFloat = 1.10
-        static let squashScaleY: CGFloat = 0.85
-        static let squashDuration: TimeInterval = 0.05
-        static let restoreDuration: TimeInterval = 0.08
+        static let goodSquashScaleX: CGFloat = 1.10
+        static let goodSquashScaleY: CGFloat = 0.86
+        static let perfectSquashScaleX: CGFloat = 1.12
+        static let perfectSquashScaleY: CGFloat = 0.82
+        static let squashDuration: TimeInterval = 0.06
+        static let overshootScaleX: CGFloat = 0.98
+        static let overshootScaleY: CGFloat = 1.06
+        static let overshootDuration: TimeInterval = 0.06
+        static let restoreDuration: TimeInterval = 0.07
+        static let impactOvershootDistancePerfect: CGFloat = 5
+        static let impactOvershootDistanceGood: CGFloat = 3
+        static let impactOvershootDuration: TimeInterval = 0.06
+        static let impactReturnDuration: TimeInterval = 0.06
 
         static let underlyingSquashScaleY: CGFloat = 0.94
+        static let underlyingSinkAmount: CGFloat = 3
         static let underlyingSquashDuration: TimeInterval = 0.05
         static let underlyingRestoreDuration: TimeInterval = 0.08
     }
@@ -67,15 +94,41 @@ final class DangoGameScene: SKScene {
     }
 
     private enum WrongAnimationParameters {
+        static let contactPauseDuration: TimeInterval = 0.05
         static let horizontalKickDistance: CGFloat = 22
         static let upwardKickDistance: CGFloat = 18
         static let kickDuration: TimeInterval = 0.10
         static let fallDuration: TimeInterval = 0.42
+    }
 
-        static let labelFontSize: CGFloat = 16
-        static let labelYOffset: CGFloat = 42
-        static let labelRiseDistance: CGFloat = 16
-        static let labelDisplayDuration: TimeInterval = 0.45
+    private enum JudgeFeedbackParameters {
+        static let labelYOffset: CGFloat = 78
+        static let missLabelYOffset: CGFloat = 58
+        static let perfectFontSize: CGFloat = 24
+        static let standardFontSize: CGFloat = 20
+        static let perfectInitialScale: CGFloat = 0.70
+        static let standardInitialScale: CGFloat = 0.82
+        static let perfectPopScale: CGFloat = 1.20
+        static let goodPopScale: CGFloat = 1.10
+        static let failurePopScale: CGFloat = 1.07
+        static let popDuration: TimeInterval = 0.08
+        static let settleDuration: TimeInterval = 0.07
+        static let fadeDuration: TimeInterval = 0.32
+        static let riseDistance: CGFloat = 18
+        static let wrongShakeAmount: CGFloat = 3
+        static let wrongShakeStepDuration: TimeInterval = 0.04
+
+        static let perfectRingInitialScale: CGFloat = 0.70
+        static let perfectRingFinalScale: CGFloat = 1.35
+        static let perfectRingDuration: TimeInterval = 0.20
+        static let perfectRingLineWidth: CGFloat = 2
+    }
+
+    private enum HapticParameters {
+        static let perfectIntensity: CGFloat = 0.85
+        static let goodIntensity: CGFloat = 0.55
+        static let wrongIntensity: CGFloat = 0.40
+        static let missIntensity: CGFloat = 0.30
     }
 
     private enum NextDisplayParameters {
@@ -90,12 +143,22 @@ final class DangoGameScene: SKScene {
     private enum StageResultDisplayParameters {
         static let centerYRatio: CGFloat = 0.68
         static let titleLabelFontSize: CGFloat = 38
+        static let starsFontSize: CGFloat = 29
+        static let starsYOffset: CGFloat = -50
+        static let perfectClearFontSize: CGFloat = 21
+        static let perfectClearYOffset: CGFloat = -89
+        static let perfectClearInitialScale: CGFloat = 0.88
+        static let perfectClearAnimationDelay: TimeInterval = 0.52
+        static let perfectClearAnimationDuration: TimeInterval = 0.14
+        static let perfectClearAnimationScale: CGFloat = 1.10
         static let detailLabelFontSize: CGFloat = 15
-        static let detailFirstYOffset: CGFloat = -48
+        static let detailFirstYOffset: CGFloat = -92
+        static let perfectClearDetailFirstYOffset: CGFloat = -127
         static let detailLineSpacing: CGFloat = 22
         static let retryLabelFontSize: CGFloat = 17
         static let retryLabelYOffset: CGFloat = -52
-        static let detailedRetryLabelYOffset: CGFloat = -218
+        static let evaluatedRetryLabelYOffset: CGFloat = -202
+        static let perfectClearRetryLabelYOffset: CGFloat = -237
         static let revealDelay: TimeInterval = 0.35
         static let revealDuration: TimeInterval = 0.20
         static let initialScale: CGFloat = 0.92
@@ -113,32 +176,6 @@ final class DangoGameScene: SKScene {
             blue: 0.18,
             alpha: 1.0
         )
-    }
-
-    private enum ScoreParameters {
-        static let goodBaseScore = 100
-        static let perfectBaseScore = 150
-        static let perfectDangoBonus = 300
-        static let baseComboMultiplier = 1.0
-        static let comboMultiplierStep = 0.1
-        static let maximumCombo = 9
-    }
-
-    private enum ScoreHUDParameters {
-        static let leadingXRatio: CGFloat = 0.06
-        static let scoreYRatio: CGFloat = 0.92
-        static let comboYOffset: CGFloat = 28
-        static let scoreFontSize: CGFloat = 18
-        static let comboFontSize: CGFloat = 15
-    }
-
-    private enum PerfectDangoDisplayParameters {
-        static let titleFontSize: CGFloat = 16
-        static let bonusFontSize: CGFloat = 15
-        static let centerYOffset: CGFloat = 76
-        static let bonusYOffset: CGFloat = -21
-        static let riseDistance: CGFloat = 18
-        static let displayDuration: TimeInterval = 0.65
     }
 
     private enum GameState {
@@ -159,14 +196,19 @@ final class DangoGameScene: SKScene {
         case wrong = "WRONG"
     }
 
+    private enum JudgeFeedbackKind {
+        case perfect
+        case good
+        case wrong
+        case miss
+    }
+
     private var skewers: [SKShapeNode] = []
     private var skewerStates: [SkewerState] = []
     private var dango: SKShapeNode?
     private var nextLabelNode: SKLabelNode?
     private var nextPreviewNode: SKShapeNode?
     private var failureIndicatorNodes: [SKShapeNode] = []
-    private var scoreLabelNode: SKLabelNode?
-    private var comboLabelNode: SKLabelNode?
     private var stageResultNode: SKNode?
     private var dangoGenerator = DangoGenerator()
     private var currentDangoColor: DangoColor?
@@ -174,17 +216,15 @@ final class DangoGameScene: SKScene {
     private var gameState = GameState.playing
     private var dangoState = DangoState.movingHorizontally
     private var horizontalDirection: CGFloat = 1
+    private var currentFallSpeed: CGFloat = 0
     private var previousUpdateTime: TimeInterval?
     private var respawnTimeRemaining: TimeInterval = 0
     private var hasJudgedCurrentDango = false
     private var missCount = 0
     private var wrongCount = 0
-    private var score = 0
-    private var combo = 0
-    private var maxCombo = 0
     private var perfectCount = 0
     private var goodCount = 0
-    private var perfectDangoCount = 0
+    private(set) var stageResult: StageResult?
 
     override init(size: CGSize) {
         super.init(size: size)
@@ -201,7 +241,6 @@ final class DangoGameScene: SKScene {
         layoutSkewers()
         layoutNextDisplay()
         layoutFailureHUD()
-        layoutScoreHUD()
         layoutDangoForCurrentSceneSize()
     }
 
@@ -216,10 +255,10 @@ final class DangoGameScene: SKScene {
             return
         }
 
-        guard dango != nil else { return }
+        guard let dango else { return }
 
         if case .movingHorizontally = dangoState {
-            dangoState = .falling
+            beginFalling(dango)
         }
     }
 
@@ -260,8 +299,6 @@ final class DangoGameScene: SKScene {
         nextLabelNode = nil
         nextPreviewNode = nil
         failureIndicatorNodes.removeAll()
-        scoreLabelNode = nil
-        comboLabelNode = nil
         stageResultNode = nil
 
         dangoGenerator = DangoGenerator()
@@ -270,27 +307,23 @@ final class DangoGameScene: SKScene {
         gameState = .playing
         dangoState = .movingHorizontally
         horizontalDirection = 1
+        currentFallSpeed = 0
         previousUpdateTime = nil
         respawnTimeRemaining = 0
         hasJudgedCurrentDango = false
         missCount = 0
         wrongCount = 0
-        score = 0
-        combo = 0
-        maxCombo = 0
         perfectCount = 0
         goodCount = 0
-        perfectDangoCount = 0
+        stageResult = nil
 
         prepareInitialDangoColors()
         addSkewers()
         addNextDisplay()
         addFailureHUD()
-        addScoreHUD()
         layoutSkewers()
         layoutNextDisplay()
         layoutFailureHUD()
-        layoutScoreHUD()
         spawnDango()
     }
 
@@ -402,44 +435,6 @@ final class DangoGameScene: SKScene {
         }
     }
 
-    private func addScoreHUD() {
-        let scoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        scoreLabel.fontSize = ScoreHUDParameters.scoreFontSize
-        scoreLabel.fontColor = Appearance.skewerColor
-        scoreLabel.horizontalAlignmentMode = .left
-        scoreLabel.verticalAlignmentMode = .center
-        scoreLabel.zPosition = 10
-        addChild(scoreLabel)
-        scoreLabelNode = scoreLabel
-
-        let comboLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        comboLabel.fontSize = ScoreHUDParameters.comboFontSize
-        comboLabel.fontColor = Appearance.skewerColor
-        comboLabel.horizontalAlignmentMode = .left
-        comboLabel.verticalAlignmentMode = .center
-        comboLabel.zPosition = 10
-        addChild(comboLabel)
-        comboLabelNode = comboLabel
-
-        updateScoreHUD()
-    }
-
-    private func layoutScoreHUD() {
-        let leadingX = size.width * ScoreHUDParameters.leadingXRatio
-        let scoreY = size.height * ScoreHUDParameters.scoreYRatio
-        scoreLabelNode?.position = CGPoint(x: leadingX, y: scoreY)
-        comboLabelNode?.position = CGPoint(
-            x: leadingX,
-            y: scoreY - ScoreHUDParameters.comboYOffset
-        )
-    }
-
-    private func updateScoreHUD() {
-        scoreLabelNode?.text = "SCORE \(formattedScore)"
-        comboLabelNode?.text = "COMBO ×\(combo)"
-        comboLabelNode?.isHidden = combo < 2
-    }
-
     private func spawnDango() {
         guard let currentDangoColor else { return }
 
@@ -457,6 +452,7 @@ final class DangoGameScene: SKScene {
         dango = newDango
         dangoState = .movingHorizontally
         horizontalDirection = 1
+        currentFallSpeed = 0
         hasJudgedCurrentDango = false
     }
 
@@ -472,6 +468,42 @@ final class DangoGameScene: SKScene {
         if case .movingHorizontally = dangoState {
             dango.position.y = size.height * DangoParameters.spawnYRatio
         }
+    }
+
+    private func beginFalling(_ dango: SKShapeNode) {
+        let lockedXPosition = dango.position.x
+        dangoState = .falling
+        currentFallSpeed = DangoParameters.initialFallSpeed
+        dango.position.x = lockedXPosition
+
+        let squashAction = SKAction.group([
+            SKAction.scaleX(
+                to: DangoParameters.tapSquashScaleX,
+                duration: DangoParameters.tapSquashDuration
+            ),
+            SKAction.scaleY(
+                to: DangoParameters.tapSquashScaleY,
+                duration: DangoParameters.tapSquashDuration
+            ),
+        ])
+        squashAction.timingMode = .easeOut
+
+        let restoreAction = SKAction.group([
+            SKAction.scaleX(
+                to: 1,
+                duration: DangoParameters.tapSquashDuration
+            ),
+            SKAction.scaleY(
+                to: 1,
+                duration: DangoParameters.tapSquashDuration
+            ),
+        ])
+        restoreAction.timingMode = .easeInEaseOut
+
+        dango.run(
+            SKAction.sequence([squashAction, restoreAction]),
+            withKey: "tapSquash"
+        )
     }
 
     private func update(dango: SKShapeNode, frameDuration: CGFloat) {
@@ -504,8 +536,34 @@ final class DangoGameScene: SKScene {
     }
 
     private func updateFallingMovement(of dango: SKShapeNode, frameDuration: CGFloat) {
-        dango.position.y -= DangoParameters.fallingSpeed * frameDuration
-        judgeDangoIfNeeded(dango)
+        let previousY = dango.position.y
+        let previousFallSpeed = currentFallSpeed
+        currentFallSpeed = min(
+            DangoParameters.maximumFallSpeed,
+            currentFallSpeed + DangoParameters.fallAcceleration * frameDuration
+        )
+        let fallDistance = (previousFallSpeed + currentFallSpeed)
+            * 0.5
+            * frameDuration
+        let nextY = previousY - fallDistance
+
+        let crossedJudgementLine = !hasJudgedCurrentDango
+            && previousY > dangoJudgementY
+            && nextY <= dangoJudgementY
+
+        if crossedJudgementLine {
+            dango.position.y = dangoJudgementY
+            judgeDangoIfNeeded(dango)
+
+            if case .falling = dangoState {
+                dango.position.y = nextY
+            }
+        } else {
+            dango.position.y = nextY
+            judgeDangoIfNeeded(dango)
+        }
+
+        guard case .falling = dangoState else { return }
 
         let radius = DangoParameters.diameter / 2
         guard dango.position.y + radius < 0 else { return }
@@ -541,6 +599,14 @@ final class DangoGameScene: SKScene {
         print("[HitJudge] \(debugText(for: result))")
 
         if case .miss = result {
+            showJudgeFeedback(
+                .miss,
+                at: CGPoint(
+                    x: size.width / 2,
+                    y: dangoJudgementY + JudgeFeedbackParameters.missLabelYOffset
+                )
+            )
+            triggerHaptic(for: .miss)
             return
         }
 
@@ -581,7 +647,11 @@ final class DangoGameScene: SKScene {
 
     private func handleWrongLanding(_ dango: SKShapeNode, targetSkewerX: CGFloat) {
         dangoState = .wrong
-        showWrongLabel(at: dango.position)
+        showJudgeFeedback(
+            .wrong,
+            at: judgeFeedbackPosition(targetSkewerX: targetSkewerX)
+        )
+        triggerHaptic(for: .wrong)
 
         let kickDirection: CGFloat = dango.position.x < targetSkewerX ? -1 : 1
         let kickAction = SKAction.moveBy(
@@ -597,39 +667,16 @@ final class DangoGameScene: SKScene {
         )
         fallAction.timingMode = .easeIn
 
-        dango.run(SKAction.sequence([kickAction, fallAction])) { [weak self, weak dango] in
+        dango.run(SKAction.sequence([
+            SKAction.wait(forDuration: WrongAnimationParameters.contactPauseDuration),
+            kickAction,
+            fallAction,
+        ])) { [weak self, weak dango] in
             guard let self, let dango, self.dango === dango else { return }
             dango.removeFromParent()
             self.dango = nil
             self.finishFailedDango(.wrong)
         }
-    }
-
-    private func showWrongLabel(at position: CGPoint) {
-        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        label.text = "WRONG"
-        label.fontSize = WrongAnimationParameters.labelFontSize
-        label.fontColor = SKColor(red: 0.72, green: 0.20, blue: 0.18, alpha: 1.0)
-        label.verticalAlignmentMode = .center
-        label.position = CGPoint(
-            x: position.x,
-            y: position.y + WrongAnimationParameters.labelYOffset
-        )
-        label.zPosition = 10
-        addChild(label)
-
-        let fadeAction = SKAction.fadeOut(
-            withDuration: WrongAnimationParameters.labelDisplayDuration
-        )
-        let riseAction = SKAction.moveBy(
-            x: 0,
-            y: WrongAnimationParameters.labelRiseDistance,
-            duration: WrongAnimationParameters.labelDisplayDuration
-        )
-        label.run(SKAction.sequence([
-            SKAction.group([fadeAction, riseAction]),
-            SKAction.removeFromParent(),
-        ]))
     }
 
     private func stick(
@@ -640,23 +687,18 @@ final class DangoGameScene: SKScene {
     ) {
         let stackLevel = skewerStates[targetSkewerIndex].dangoCount
         let underlyingDango = skewerStates[targetSkewerIndex].dangoNodes.last
-        let wasPerfect: Bool
+        guard skewerStates[targetSkewerIndex].addDangoNode(dango) else { return }
+        recordSuccessfulLanding(result)
+
+        let isPerfect: Bool
+        let feedbackKind: JudgeFeedbackKind
         if case .perfect = result {
-            wasPerfect = true
+            isPerfect = true
+            feedbackKind = .perfect
         } else {
-            wasPerfect = false
+            isPerfect = false
+            feedbackKind = .good
         }
-
-        guard skewerStates[targetSkewerIndex].addDangoNode(
-            dango,
-            wasPerfect: wasPerfect
-        ) else { return }
-
-        recordSuccessfulLanding(
-            result,
-            targetSkewerIndex: targetSkewerIndex,
-            targetSkewerX: targetSkewerX
-        )
 
         dangoState = .stuck
 
@@ -671,17 +713,35 @@ final class DangoGameScene: SKScene {
         )
         snapAction.timingMode = .easeOut
 
+        let squashScaleX = isPerfect
+            ? LandingAnimationParameters.perfectSquashScaleX
+            : LandingAnimationParameters.goodSquashScaleX
+        let squashScaleY = isPerfect
+            ? LandingAnimationParameters.perfectSquashScaleY
+            : LandingAnimationParameters.goodSquashScaleY
         let squashAction = SKAction.group([
             SKAction.scaleX(
-                to: LandingAnimationParameters.squashScaleX,
+                to: squashScaleX,
                 duration: LandingAnimationParameters.squashDuration
             ),
             SKAction.scaleY(
-                to: LandingAnimationParameters.squashScaleY,
+                to: squashScaleY,
                 duration: LandingAnimationParameters.squashDuration
             ),
         ])
         squashAction.timingMode = .easeOut
+
+        let overshootAction = SKAction.group([
+            SKAction.scaleX(
+                to: LandingAnimationParameters.overshootScaleX,
+                duration: LandingAnimationParameters.overshootDuration
+            ),
+            SKAction.scaleY(
+                to: LandingAnimationParameters.overshootScaleY,
+                duration: LandingAnimationParameters.overshootDuration
+            ),
+        ])
+        overshootAction.timingMode = .easeInEaseOut
 
         let restoreAction = SKAction.group([
             SKAction.scaleX(
@@ -693,14 +753,55 @@ final class DangoGameScene: SKScene {
                 duration: LandingAnimationParameters.restoreDuration
             ),
         ])
-        restoreAction.timingMode = .easeOut
+        restoreAction.timingMode = .easeInEaseOut
 
-        let puniAction = SKAction.sequence([squashAction, restoreAction])
-        let landingAction = SKAction.group([snapAction, puniAction])
+        let impactAction = SKAction.run { [weak self, weak underlyingDango] in
+            guard let self else { return }
+            self.showJudgeFeedback(
+                feedbackKind,
+                at: self.judgeFeedbackPosition(targetSkewerX: targetSkewerX)
+            )
+            self.triggerHaptic(for: feedbackKind)
 
-        if let underlyingDango {
-            animateUnderlyingDango(underlyingDango)
+            if let underlyingDango {
+                self.animateUnderlyingDango(underlyingDango)
+            }
+
+            if isPerfect {
+                self.showPerfectRing(at: targetPosition)
+            }
         }
+
+        let impactOvershootDistance = isPerfect
+            ? LandingAnimationParameters.impactOvershootDistancePerfect
+            : LandingAnimationParameters.impactOvershootDistanceGood
+        let sinkAction = SKAction.moveTo(
+            y: targetPosition.y - impactOvershootDistance,
+            duration: LandingAnimationParameters.impactOvershootDuration
+        )
+        sinkAction.timingMode = .easeOut
+
+        let returnAction = SKAction.moveTo(
+            y: targetPosition.y,
+            duration: LandingAnimationParameters.impactReturnDuration
+        )
+        returnAction.timingMode = .easeInEaseOut
+
+        let squashAndSinkAction = SKAction.group([squashAction, sinkAction])
+        let overshootAndReturnAction = SKAction.group([
+            overshootAction,
+            returnAction,
+        ])
+        let puniAction = SKAction.sequence([
+            squashAndSinkAction,
+            overshootAndReturnAction,
+            restoreAction,
+        ])
+        let landingAction = SKAction.sequence([
+            snapAction,
+            impactAction,
+            puniAction,
+        ])
 
         dango.run(landingAction) { [weak self, weak dango] in
             guard let self, let dango, self.dango === dango else { return }
@@ -716,10 +817,18 @@ final class DangoGameScene: SKScene {
 
     private func showStageClear() {
         gameState = .stageCleared
+        let result = StageResult(
+            isStageClear: true,
+            perfectCount: perfectCount,
+            goodCount: goodCount,
+            missCount: missCount,
+            wrongCount: wrongCount
+        )
+        stageResult = result
         showStageResult(
             title: "STAGE CLEAR!",
             titleColor: Appearance.skewerColor,
-            detailLines: stageClearSummaryLines
+            evaluation: result
         )
     }
 
@@ -731,7 +840,7 @@ final class DangoGameScene: SKScene {
     private func showStageResult(
         title: String,
         titleColor: SKColor,
-        detailLines: [String] = []
+        evaluation: StageResult? = nil
     ) {
         guard stageResultNode == nil else { return }
 
@@ -757,16 +866,8 @@ final class DangoGameScene: SKScene {
         titleLabel.verticalAlignmentMode = .center
         container.addChild(titleLabel)
 
-        for (index, text) in detailLines.enumerated() {
-            let detailLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
-            detailLabel.text = text
-            detailLabel.fontSize = StageResultDisplayParameters.detailLabelFontSize
-            detailLabel.fontColor = Appearance.skewerColor
-            detailLabel.horizontalAlignmentMode = .center
-            detailLabel.verticalAlignmentMode = .center
-            detailLabel.position.y = StageResultDisplayParameters.detailFirstYOffset
-                - CGFloat(index) * StageResultDisplayParameters.detailLineSpacing
-            container.addChild(detailLabel)
+        if let evaluation {
+            addEvaluationDisplay(evaluation, to: container)
         }
 
         let retryLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
@@ -775,9 +876,13 @@ final class DangoGameScene: SKScene {
         retryLabel.fontColor = Appearance.skewerColor
         retryLabel.horizontalAlignmentMode = .center
         retryLabel.verticalAlignmentMode = .center
-        retryLabel.position.y = detailLines.isEmpty
-            ? StageResultDisplayParameters.retryLabelYOffset
-            : StageResultDisplayParameters.detailedRetryLabelYOffset
+        if let evaluation {
+            retryLabel.position.y = evaluation.isPerfectClear
+                ? StageResultDisplayParameters.perfectClearRetryLabelYOffset
+                : StageResultDisplayParameters.evaluatedRetryLabelYOffset
+        } else {
+            retryLabel.position.y = StageResultDisplayParameters.retryLabelYOffset
+        }
         container.addChild(retryLabel)
 
         let revealAction = SKAction.group([
@@ -794,90 +899,267 @@ final class DangoGameScene: SKScene {
         ]))
     }
 
-    private func recordSuccessfulLanding(
-        _ result: HitResult,
-        targetSkewerIndex: Int,
-        targetSkewerX: CGFloat
+    private func addEvaluationDisplay(
+        _ result: StageResult,
+        to container: SKNode
     ) {
-        let baseScore: Int
+        let starsLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        starsLabel.text = result.starsText
+        starsLabel.fontSize = StageResultDisplayParameters.starsFontSize
+        starsLabel.fontColor = Appearance.skewerColor
+        starsLabel.horizontalAlignmentMode = .center
+        starsLabel.verticalAlignmentMode = .center
+        starsLabel.position.y = StageResultDisplayParameters.starsYOffset
+        container.addChild(starsLabel)
+
+        if result.isPerfectClear {
+            addPerfectClearDisplay(to: container)
+        }
+
+        let detailLines = [
+            "PERFECT \(result.perfectCount)",
+            "GOOD \(result.goodCount)",
+            "MISS \(result.missCount)",
+            "WRONG \(result.wrongCount)",
+        ]
+        let detailFirstYOffset = result.isPerfectClear
+            ? StageResultDisplayParameters.perfectClearDetailFirstYOffset
+            : StageResultDisplayParameters.detailFirstYOffset
+
+        for (index, text) in detailLines.enumerated() {
+            let detailLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
+            detailLabel.text = text
+            detailLabel.fontSize = StageResultDisplayParameters.detailLabelFontSize
+            detailLabel.fontColor = Appearance.skewerColor
+            detailLabel.horizontalAlignmentMode = .center
+            detailLabel.verticalAlignmentMode = .center
+            detailLabel.position.y = detailFirstYOffset
+                - CGFloat(index) * StageResultDisplayParameters.detailLineSpacing
+            container.addChild(detailLabel)
+        }
+    }
+
+    private func addPerfectClearDisplay(to container: SKNode) {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = "PERFECT CLEAR!"
+        label.fontSize = StageResultDisplayParameters.perfectClearFontSize
+        label.fontColor = Appearance.skewerColor
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+        label.position.y = StageResultDisplayParameters.perfectClearYOffset
+        label.setScale(StageResultDisplayParameters.perfectClearInitialScale)
+        container.addChild(label)
+
+        let growAction = SKAction.scale(
+            to: StageResultDisplayParameters.perfectClearAnimationScale,
+            duration: StageResultDisplayParameters.perfectClearAnimationDuration
+        )
+        growAction.timingMode = .easeOut
+
+        let restoreAction = SKAction.scale(
+            to: 1,
+            duration: StageResultDisplayParameters.perfectClearAnimationDuration
+        )
+        restoreAction.timingMode = .easeInEaseOut
+
+        label.run(SKAction.sequence([
+            SKAction.wait(
+                forDuration: StageResultDisplayParameters.perfectClearAnimationDelay
+            ),
+            growAction,
+            restoreAction,
+        ]))
+    }
+
+    private func recordSuccessfulLanding(_ result: HitResult) {
         switch result {
         case .perfect:
             perfectCount += 1
-            baseScore = ScoreParameters.perfectBaseScore
         case .goodLeft, .goodRight:
             goodCount += 1
-            baseScore = ScoreParameters.goodBaseScore
         case .miss:
             return
         }
-
-        combo = min(combo + 1, ScoreParameters.maximumCombo)
-        maxCombo = max(maxCombo, combo)
-
-        let multiplier = ScoreParameters.baseComboMultiplier
-            + Double(combo - 1) * ScoreParameters.comboMultiplierStep
-        score += Int((Double(baseScore) * multiplier).rounded())
-
-        if skewerStates[targetSkewerIndex].isPerfectDango {
-            score += ScoreParameters.perfectDangoBonus
-            perfectDangoCount += 1
-            showPerfectDangoLabel(atX: targetSkewerX)
-        }
-
-        updateScoreHUD()
     }
 
-    private func showPerfectDangoLabel(atX xPosition: CGFloat) {
-        let container = SKNode()
-        container.position = CGPoint(
-            x: xPosition,
-            y: skewerTopY + PerfectDangoDisplayParameters.centerYOffset
+    private func judgeFeedbackPosition(targetSkewerX: CGFloat) -> CGPoint {
+        CGPoint(
+            x: targetSkewerX,
+            y: skewerTopY + JudgeFeedbackParameters.labelYOffset
         )
-        container.zPosition = 15
-        addChild(container)
+    }
 
-        let titleLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        titleLabel.text = "PERFECT DANGO!"
-        titleLabel.fontSize = PerfectDangoDisplayParameters.titleFontSize
-        titleLabel.fontColor = Appearance.skewerColor
-        titleLabel.horizontalAlignmentMode = .center
-        titleLabel.verticalAlignmentMode = .center
-        container.addChild(titleLabel)
+    private func showJudgeFeedback(
+        _ kind: JudgeFeedbackKind,
+        at position: CGPoint
+    ) {
+        let text: String
+        let fontSize: CGFloat
+        let initialScale: CGFloat
+        let popScale: CGFloat
+        let color: SKColor
 
-        let bonusLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        bonusLabel.text = "+\(ScoreParameters.perfectDangoBonus)"
-        bonusLabel.fontSize = PerfectDangoDisplayParameters.bonusFontSize
-        bonusLabel.fontColor = Appearance.skewerColor
-        bonusLabel.horizontalAlignmentMode = .center
-        bonusLabel.verticalAlignmentMode = .center
-        bonusLabel.position.y = PerfectDangoDisplayParameters.bonusYOffset
-        container.addChild(bonusLabel)
+        switch kind {
+        case .perfect:
+            text = "PERFECT"
+            fontSize = JudgeFeedbackParameters.perfectFontSize
+            initialScale = JudgeFeedbackParameters.perfectInitialScale
+            popScale = JudgeFeedbackParameters.perfectPopScale
+            color = Appearance.perfectFeedbackColor
+        case .good:
+            text = "GOOD"
+            fontSize = JudgeFeedbackParameters.standardFontSize
+            initialScale = JudgeFeedbackParameters.standardInitialScale
+            popScale = JudgeFeedbackParameters.goodPopScale
+            color = Appearance.skewerColor
+        case .wrong:
+            text = "WRONG"
+            fontSize = JudgeFeedbackParameters.standardFontSize
+            initialScale = JudgeFeedbackParameters.standardInitialScale
+            popScale = JudgeFeedbackParameters.failurePopScale
+            color = FailureParameters.failedColor
+        case .miss:
+            text = "MISS"
+            fontSize = JudgeFeedbackParameters.standardFontSize
+            initialScale = JudgeFeedbackParameters.standardInitialScale
+            popScale = JudgeFeedbackParameters.failurePopScale
+            color = Appearance.missFeedbackColor
+        }
 
-        let duration = PerfectDangoDisplayParameters.displayDuration
-        container.run(SKAction.sequence([
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = text
+        label.fontSize = fontSize
+        label.fontColor = color
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+        label.position = position
+        label.zPosition = 12
+        label.setScale(initialScale)
+        addChild(label)
+
+        let popAction = SKAction.scale(
+            to: popScale,
+            duration: JudgeFeedbackParameters.popDuration
+        )
+        popAction.timingMode = .easeOut
+
+        let settleAction = SKAction.scale(
+            to: 1,
+            duration: JudgeFeedbackParameters.settleDuration
+        )
+        settleAction.timingMode = .easeInEaseOut
+
+        let exitAction = SKAction.group([
+            SKAction.fadeOut(withDuration: JudgeFeedbackParameters.fadeDuration),
+            SKAction.moveBy(
+                x: 0,
+                y: JudgeFeedbackParameters.riseDistance,
+                duration: JudgeFeedbackParameters.fadeDuration
+            ),
+        ])
+        exitAction.timingMode = .easeIn
+
+        let lifecycleAction = SKAction.sequence([
+            popAction,
+            settleAction,
+            exitAction,
+        ])
+
+        if case .wrong = kind {
+            let shakeAmount = JudgeFeedbackParameters.wrongShakeAmount
+            let shakeDuration = JudgeFeedbackParameters.wrongShakeStepDuration
+            let shakeAction = SKAction.sequence([
+                SKAction.moveBy(x: -shakeAmount, y: 0, duration: shakeDuration),
+                SKAction.moveBy(x: shakeAmount * 2, y: 0, duration: shakeDuration),
+                SKAction.moveBy(x: -shakeAmount, y: 0, duration: shakeDuration),
+            ])
+            label.run(SKAction.sequence([
+                SKAction.group([lifecycleAction, shakeAction]),
+                SKAction.removeFromParent(),
+            ]))
+        } else {
+            label.run(SKAction.sequence([
+                lifecycleAction,
+                SKAction.removeFromParent(),
+            ]))
+        }
+    }
+
+    private func showPerfectRing(at position: CGPoint) {
+        let ring = SKShapeNode(circleOfRadius: DangoParameters.diameter / 2)
+        ring.fillColor = .clear
+        ring.strokeColor = Appearance.perfectFeedbackColor
+        ring.lineWidth = JudgeFeedbackParameters.perfectRingLineWidth
+        ring.position = position
+        ring.zPosition = 2
+        ring.setScale(JudgeFeedbackParameters.perfectRingInitialScale)
+        addChild(ring)
+
+        let expandAction = SKAction.scale(
+            to: JudgeFeedbackParameters.perfectRingFinalScale,
+            duration: JudgeFeedbackParameters.perfectRingDuration
+        )
+        expandAction.timingMode = .easeOut
+        ring.run(SKAction.sequence([
             SKAction.group([
-                SKAction.fadeOut(withDuration: duration),
-                SKAction.moveBy(
-                    x: 0,
-                    y: PerfectDangoDisplayParameters.riseDistance,
-                    duration: duration
+                expandAction,
+                SKAction.fadeOut(
+                    withDuration: JudgeFeedbackParameters.perfectRingDuration
                 ),
             ]),
             SKAction.removeFromParent(),
         ]))
     }
 
+    private func triggerHaptic(for kind: JudgeFeedbackKind) {
+        let style: UIImpactFeedbackGenerator.FeedbackStyle
+        let intensity: CGFloat
+
+        switch kind {
+        case .perfect:
+            style = .medium
+            intensity = HapticParameters.perfectIntensity
+        case .good:
+            style = .light
+            intensity = HapticParameters.goodIntensity
+        case .wrong:
+            style = .rigid
+            intensity = HapticParameters.wrongIntensity
+        case .miss:
+            style = .soft
+            intensity = HapticParameters.missIntensity
+        }
+
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.prepare()
+        generator.impactOccurred(intensity: intensity)
+    }
+
     private func animateUnderlyingDango(_ underlyingDango: SKShapeNode) {
-        let squashAction = SKAction.scaleY(
-            to: LandingAnimationParameters.underlyingSquashScaleY,
-            duration: LandingAnimationParameters.underlyingSquashDuration
-        )
+        let squashAction = SKAction.group([
+            SKAction.scaleY(
+                to: LandingAnimationParameters.underlyingSquashScaleY,
+                duration: LandingAnimationParameters.underlyingSquashDuration
+            ),
+            SKAction.moveBy(
+                x: 0,
+                y: -LandingAnimationParameters.underlyingSinkAmount,
+                duration: LandingAnimationParameters.underlyingSquashDuration
+            ),
+        ])
         squashAction.timingMode = .easeOut
 
-        let restoreAction = SKAction.scaleY(
-            to: 1,
-            duration: LandingAnimationParameters.underlyingRestoreDuration
-        )
+        let restoreAction = SKAction.group([
+            SKAction.scaleY(
+                to: 1,
+                duration: LandingAnimationParameters.underlyingRestoreDuration
+            ),
+            SKAction.moveBy(
+                x: 0,
+                y: LandingAnimationParameters.underlyingSinkAmount,
+                duration: LandingAnimationParameters.underlyingRestoreDuration
+            ),
+        ])
         restoreAction.timingMode = .easeOut
 
         underlyingDango.run(SKAction.sequence([squashAction, restoreAction]))
@@ -960,9 +1242,7 @@ final class DangoGameScene: SKScene {
             "[Failure] \(failureKind.rawValue): "
                 + "\(totalFailureCount)/\(FailureParameters.maximumCount)"
         )
-        combo = 0
         updateFailureHUD()
-        updateScoreHUD()
 
         if totalFailureCount >= FailureParameters.maximumCount {
             showStageFailed()
@@ -987,22 +1267,6 @@ final class DangoGameScene: SKScene {
 
     private var totalFailureCount: Int {
         missCount + wrongCount
-    }
-
-    private var formattedScore: String {
-        String(format: "%04d", score)
-    }
-
-    private var stageClearSummaryLines: [String] {
-        [
-            "SCORE \(formattedScore)",
-            "PERFECT \(perfectCount)",
-            "GOOD \(goodCount)",
-            "MISS \(missCount)",
-            "WRONG \(wrongCount)",
-            "MAX COMBO \(maxCombo)",
-            "PERFECT DANGO \(perfectDangoCount)",
-        ]
     }
 
     private var isStageClear: Bool {

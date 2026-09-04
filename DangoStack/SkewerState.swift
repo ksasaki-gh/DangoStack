@@ -10,7 +10,6 @@ struct SkewerState {
 
     let xPositionRatio: CGFloat
     private(set) var dangoNodes: [SKShapeNode] = []
-    private(set) var perfectJudgements: [Bool] = []
 
     var dangoCount: Int {
         dangoNodes.count
@@ -25,19 +24,9 @@ struct SkewerState {
         dangoCount >= Self.maximumDangoCount
     }
 
-    var isPerfectDango: Bool {
-        isFull
-            && perfectJudgements.count == Self.maximumDangoCount
-            && perfectJudgements.allSatisfy { $0 }
-    }
-
-    mutating func addDangoNode(
-        _ node: SKShapeNode,
-        wasPerfect: Bool
-    ) -> Bool {
+    mutating func addDangoNode(_ node: SKShapeNode) -> Bool {
         guard !isFull else { return false }
         dangoNodes.append(node)
-        perfectJudgements.append(wasPerfect)
         return true
     }
 }

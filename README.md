@@ -1,3 +1,87 @@
+Task 13.3を実装しました。Xcodeビルド成功、iPhone Simulatorへのインストール・起動も確認済みです。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+実装内容：
+1. タップ時の縮み
+   [DangoGameScene.swift (line 50)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:50) の DangoParameters で調整できます。
+   - tapSquashScaleX = 0.96
+   - tapSquashScaleY = 0.92
+   - tapSquashDuration = 0.04
+   beginFalling()で落下状態へ即座に切り替え、縮み演出と落下を同時に開始しています。
+2. 加速落下
+   同じく DangoParameters の以下で調整できます。
+   - initialFallSpeed = 250
+   - fallAcceleration = 900
+   - maximumFallSpeed = 650
+   [updateFallingMovement() (line 538)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:538) でフレームごとに速度を加算し、最大速度で制限しています。落下中はY座標だけを更新するため、タップ時のX座標から横へずれません。
+3. 着弾オーバーシュート
+   [DangoGameScene.swift (line 67)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:67) の LandingAnimationParameters で調整できます。
+   - PERFECT：impactOvershootDistancePerfect = 5
+   - GOOD：impactOvershootDistanceGood = 3
+   - 沈み時間：impactOvershootDuration = 0.06
+   - 戻り時間：impactReturnDuration = 0.06
+4. ぷにっとの同期
+   着弾処理を次の一連のアニメーションとして構成しました。
+   スナップ → 縦につぶれながら下へ沈む → 伸び返しながら最終Yへ戻る → 通常サイズ
+   PERFECTはGOODより沈み量と変形量が少し強くなっています。MISSとWRONGにはこのオーバーシュートを適用していません。
+5. 高速落下時の判定抜け防止
+   更新前の previousY と更新後の nextY を比較し、その間で判定ラインを跨いだか検出しています。跨いだフレームでは一度正確に判定ライン上へ配置して判定するため、1フレームでラインを通過しても取りこぼしません。
+CURRENT / NEXT、WRONG / MISS、失敗回数、星評価、PERFECT CLEAR、CLEAR / FAILED、Retryのルールには変更を加えていません。
+
+Task 13.2を実装しました。Xcodeビルド成功、iPhone Simulatorでの起動も確認済みです。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+1. 判定文字
+[showJudgeFeedback (line 898)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:898)で、PERFECT／GOOD／WRONG／MISSを共通表示しています。
+表示は小さい状態から拡大し、通常サイズへ戻った後、上昇しながらフェードアウトして確実に削除されます。GOOD LEFT／RIGHTは内部判定を維持しつつ、画面上ではどちらもGOODです。
+2. フィードバックの違い
+   - PERFECT：大きめの文字、強めの拡大、強いぷにっ、着弾リング、mediumハプティック
+   - GOOD：控えめな文字と拡大、通常のぷにっ、lightハプティック
+   - WRONG：文字の左右揺れ、短い接触停止後に横へ弾いて落下、rigid系ハプティック
+   - MISS：中央付近へ文字を表示し、団子はそのまま落下、soft系ハプティック
+失敗回数、CURRENT再挑戦、NEXT維持などのルールは変更していません。
+3. ぷにっ演出の調整値
+[LandingAnimationParameters (line 62)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:62)にあります。
+- PERFECT／GOOD別のつぶれ量
+- 横・縦のオーバーシュート
+- 各アニメーション時間
+- 直下団子のつぶれ量
+- 直下団子が沈む距離
+4. スナップ時間
+[DangoGameScene.swift (line 65)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:65)のsnapDurationで変更できます。
+スナップ完了後に、判定表示・ハプティック・ぷにっを開始する順番へ変更しました。
+5. ハプティック
+処理本体は[triggerHaptic (line 1020)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:1020)、強度は[HapticParameters (line 118)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:118)で調整できます。実際の感触は実機での確認が必要です。
+6. ヒットストップ・微小シェイク
+ゲーム全体の時間制御や入力感へ影響させないため、今回は実装していません。代わりにPERFECT専用の短い着弾リングを追加しています。判定文字やリングの値は[JudgeFeedbackParameters (line 95)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:95)で調整できます。
+
+Task 13.1を実装しました。Xcodeビルド成功、iPhone Simulatorで起動し、Score／Combo HUDが削除されていることを確認済みです。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+- [SkewerState.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SkewerState.swift)
+- [StageResult.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageResult.swift)
+1. Score / Combo関連の削除
+以下を削除しました。
+- 点数、Combo、Max Comboの状態
+- 基本点、倍率、PERFECT DANGOボーナス定数
+- Score／Combo HUDと更新処理
+- MISS／WRONG時のComboリセット
+- クリア結果内のScore／Max Combo
+- 串単位のPERFECT DANGO判定・演出・履歴
+PERFECT／GOOD回数の記録のみ維持しています。
+2. 星評価
+[StageResult.swift (line 29)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageResult.swift:29)でmissCount + wrongCountから計算します。
+- 失敗0：★★★
+- 失敗1：★★☆
+- 失敗2：★☆☆
+- 未クリア：星0
+3. PERFECT CLEAR判定
+[StageResult.swift (line 38)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageResult.swift:38)で、ステージクリア・PERFECT 9回・GOOD/MISS/WRONGすべて0を確認しています。
+成立時はクリア画面に大きめのPERFECT CLEAR!を表示し、短い拡大アニメーションを行います。
+4. StageResultの今後の利用
+クリア時に[DangoGameScene.swift (line 634)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:634)でStageResultを生成し、シーンの読み取り可能なstageResultへ保存します。
+今後はResultViewへStageResultを渡して表示し、SaveManagerではstarsやisPerfectClearを保存できます。Retry時にはstageResult = nilと各判定回数の初期化を行います。
+
 Task 13を実装しました。Xcodeビルド成功、iPhone Simulatorで起動とHUD表示を確認済みです。
 変更ファイル：
 - [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)

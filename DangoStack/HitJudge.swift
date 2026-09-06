@@ -19,7 +19,9 @@ struct HitJudge {
     static func judge(
         dangoX: CGFloat,
         dangoDiameter: CGFloat,
-        skewerCenterXs: [CGFloat]
+        skewerCenterXs: [CGFloat],
+        perfectThresholdScale: CGFloat = 1,
+        goodThresholdScale: CGFloat = 1
     ) -> HitResult {
         guard let nearestSkewerX = nearestSkewerCenterX(
             dangoX: dangoX,
@@ -31,11 +33,18 @@ struct HitJudge {
         let horizontalOffset = dangoX - nearestSkewerX
         let horizontalDistance = abs(horizontalOffset)
 
-        if horizontalDistance <= dangoDiameter * perfectThresholdRatio {
+        let perfectThreshold = dangoDiameter
+            * perfectThresholdRatio
+            * max(perfectThresholdScale, 0)
+        let goodThreshold = dangoDiameter
+            * goodThresholdRatio
+            * max(goodThresholdScale, 0)
+
+        if horizontalDistance <= perfectThreshold {
             return .perfect
         }
 
-        if horizontalDistance <= dangoDiameter * goodThresholdRatio {
+        if horizontalDistance <= goodThreshold {
             return horizontalOffset < 0 ? .goodLeft : .goodRight
         }
 

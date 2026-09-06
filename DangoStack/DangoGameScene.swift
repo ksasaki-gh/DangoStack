@@ -43,13 +43,12 @@ final class DangoGameScene: SKScene {
     private enum Layout {
         static let skewerXPositionRatios: [CGFloat] = [0.25, 0.5, 0.75]
         static let skewerCenterYRatio: CGFloat = 0.23
-        static let skewerWidthRatio: CGFloat = 0.025
+        static let skewerWidthRatio: CGFloat = 0.030
         static let skewerHeightRatio: CGFloat = 0.30
     }
 
     private enum DangoParameters {
         static let diameter: CGFloat = 56
-        static let horizontalSpeed: CGFloat = 140
         static let horizontalRangeRatios: ClosedRange<CGFloat> = 0.18...0.82
         static let tapSquashScaleX: CGFloat = 1.16
         static let tapSquashScaleY: CGFloat = 0.82
@@ -140,6 +139,29 @@ final class DangoGameScene: SKScene {
         static let previewLineWidth: CGFloat = 1.5
     }
 
+    private enum StageDisplayParameters {
+        static let startLabelYRatio: CGFloat = 0.66
+        static let startLabelFontSize: CGFloat = 28
+        static let startLabelHoldDuration: TimeInterval = 0.55
+        static let startLabelFadeDuration: TimeInterval = 0.30
+
+        static let debugControlYRatio: CGFloat = 0.92
+        static let debugPreviousXRatio: CGFloat = 0.07
+        static let debugNumberXRatio: CGFloat = 0.16
+        static let debugNextXRatio: CGFloat = 0.25
+        static let debugButtonSize = CGSize(width: 38, height: 30)
+        static let debugButtonFontSize: CGFloat = 17
+        static let debugNumberFontSize: CGFloat = 13
+        static let debugDisabledAlpha: CGFloat = 0.25
+        static let debugEnabledAlpha: CGFloat = 0.72
+
+        static let nextStageFontSize: CGFloat = 17
+        static let nextStageYOffset: CGFloat = -151
+        static let perfectClearNextStageYOffset: CGFloat = -186
+        static let nextStageRetrySpacing: CGFloat = 34
+        static let allStagesClearFontSize: CGFloat = 31
+    }
+
     private enum StageResultDisplayParameters {
         static let centerYRatio: CGFloat = 0.68
         static let titleLabelFontSize: CGFloat = 38
@@ -157,8 +179,8 @@ final class DangoGameScene: SKScene {
         static let detailLineSpacing: CGFloat = 22
         static let retryLabelFontSize: CGFloat = 17
         static let retryLabelYOffset: CGFloat = -52
-        static let evaluatedRetryLabelYOffset: CGFloat = -202
-        static let perfectClearRetryLabelYOffset: CGFloat = -237
+        static let evaluatedRetryLabelYOffset: CGFloat = -159
+        static let perfectClearRetryLabelYOffset: CGFloat = -194
         static let revealDelay: TimeInterval = 0.35
         static let revealDuration: TimeInterval = 0.20
         static let initialScale: CGFloat = 0.92
@@ -166,14 +188,27 @@ final class DangoGameScene: SKScene {
 
     private enum FailureParameters {
         static let maximumCount = 3
-        static let indicatorRadius: CGFloat = 6
-        static let indicatorSpacing: CGFloat = 24
+        static let lifeCircleRadius: CGFloat = 7
+        static let lifeCircleSpacing: CGFloat = 26
         static let indicatorCenterYRatio: CGFloat = 0.045
-        static let indicatorLineWidth: CGFloat = 2
-        static let failedColor = SKColor(
+        static let lifeCircleLineWidth: CGFloat = 1.5
+        static let lifeBreakDuration: TimeInterval = 0.26
+        static let lifeBreakScale: CGFloat = 1.18
+        static let lifeShakeAmount: CGFloat = 2.5
+        static let lifeFragmentCount = 3
+        static let lifeFragmentDistance: CGFloat = 18
+        static let lifeFragmentDuration: TimeInterval = 0.18
+        static let failedDelayAfterLastLife: TimeInterval = 0.27
+        static let lifeColor = SKColor(
             red: 0.72,
             green: 0.20,
             blue: 0.18,
+            alpha: 1.0
+        )
+        static let crackColor = SKColor(
+            red: 1.0,
+            green: 0.82,
+            blue: 0.72,
             alpha: 1.0
         )
     }
@@ -181,6 +216,7 @@ final class DangoGameScene: SKScene {
     private enum GameState {
         case playing
         case stageCleared
+        case stageFailedPending
         case stageFailed
     }
 
@@ -203,19 +239,31 @@ final class DangoGameScene: SKScene {
         case miss
     }
 
+    private enum NodeName {
+        static let debugPreviousStage = "debugPreviousStage"
+        static let debugNextStage = "debugNextStage"
+        static let resultNextStage = "resultNextStage"
+    }
+
+    private var skewerGroupNode: SKNode?
     private var skewers: [SKShapeNode] = []
     private var skewerStates: [SkewerState] = []
     private var dango: SKShapeNode?
     private var nextLabelNode: SKLabelNode?
     private var nextPreviewNode: SKShapeNode?
-    private var failureIndicatorNodes: [SKShapeNode] = []
+    private var lifeIndicatorNodes: [SKShapeNode] = []
+    private var debugPreviousStageButton: SKShapeNode?
+    private var debugNextStageButton: SKShapeNode?
+    private var debugStageNumberLabel: SKLabelNode?
     private var stageResultNode: SKNode?
+    private var stageManager: StageManager
     private var dangoGenerator = DangoGenerator()
     private var currentDangoColor: DangoColor?
     private var nextDangoColor: DangoColor?
     private var gameState = GameState.playing
     private var dangoState = DangoState.movingHorizontally
     private var horizontalDirection: CGFloat = 1
+    private var skewerMovementPhase: CGFloat = 0
     private var currentFallSpeed: CGFloat = 0
     private var previousUpdateTime: TimeInterval?
     private var respawnTimeRemaining: TimeInterval = 0
@@ -227,11 +275,19 @@ final class DangoGameScene: SKScene {
     private(set) var stageResult: StageResult?
 
     override init(size: CGSize) {
+        stageManager = StageManager()
+        super.init(size: size)
+        configureScene()
+    }
+
+    init(size: CGSize, stageManager: StageManager) {
+        self.stageManager = stageManager
         super.init(size: size)
         configureScene()
     }
 
     required init?(coder aDecoder: NSCoder) {
+        stageManager = StageManager()
         super.init(coder: aDecoder)
         configureScene()
     }
@@ -240,11 +296,19 @@ final class DangoGameScene: SKScene {
         super.didChangeSize(oldSize)
         layoutSkewers()
         layoutNextDisplay()
-        layoutFailureHUD()
+        layoutLifeHUD()
+        layoutDebugStageControls()
         layoutDangoForCurrentSceneSize()
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let touchLocation = touch.location(in: self)
+
+        if handleStageControl(at: touchLocation) {
+            return
+        }
+
         if case .stageCleared = gameState {
             resetGame()
             return
@@ -274,6 +338,8 @@ final class DangoGameScene: SKScene {
             DangoParameters.maximumFrameDuration
         )
 
+        updateSkewerMovement(frameDuration: CGFloat(frameDuration))
+
         if let dango {
             update(dango: dango, frameDuration: CGFloat(frameDuration))
         } else {
@@ -288,9 +354,10 @@ final class DangoGameScene: SKScene {
 
     private func resetGame() {
         removeAllActions()
-        children.forEach { $0.removeAllActions() }
+        children.forEach(removeAllActionsRecursively)
         removeAllChildren()
 
+        skewerGroupNode = nil
         skewers.removeAll()
         skewerStates = Layout.skewerXPositionRatios.map {
             SkewerState(xPositionRatio: $0)
@@ -298,7 +365,10 @@ final class DangoGameScene: SKScene {
         dango = nil
         nextLabelNode = nil
         nextPreviewNode = nil
-        failureIndicatorNodes.removeAll()
+        lifeIndicatorNodes.removeAll()
+        debugPreviousStageButton = nil
+        debugNextStageButton = nil
+        debugStageNumberLabel = nil
         stageResultNode = nil
 
         dangoGenerator = DangoGenerator()
@@ -307,6 +377,7 @@ final class DangoGameScene: SKScene {
         gameState = .playing
         dangoState = .movingHorizontally
         horizontalDirection = 1
+        skewerMovementPhase = 0
         currentFallSpeed = 0
         previousUpdateTime = nil
         respawnTimeRemaining = 0
@@ -320,26 +391,42 @@ final class DangoGameScene: SKScene {
         prepareInitialDangoColors()
         addSkewers()
         addNextDisplay()
-        addFailureHUD()
+        addLifeHUD()
+#if DEBUG
+        addDebugStageControls()
+#endif
         layoutSkewers()
         layoutNextDisplay()
-        layoutFailureHUD()
+        layoutLifeHUD()
+        layoutDebugStageControls()
         spawnDango()
+        showStageStartLabel()
+    }
+
+    private func removeAllActionsRecursively(from node: SKNode) {
+        node.removeAllActions()
+        node.children.forEach(removeAllActionsRecursively)
     }
 
     private func addSkewers() {
+        let groupNode = SKNode()
+        addChild(groupNode)
+        skewerGroupNode = groupNode
+
         skewers = Layout.skewerXPositionRatios.map { _ in
             let skewer = SKShapeNode()
             skewer.fillColor = Appearance.skewerColor
             skewer.strokeColor = Appearance.skewerColor
-            addChild(skewer)
+            groupNode.addChild(skewer)
             return skewer
         }
     }
 
     private func layoutSkewers() {
         let skewerSize = CGSize(
-            width: size.width * Layout.skewerWidthRatio,
+            width: size.width
+                * Layout.skewerWidthRatio
+                * currentStageConfig.skewerWidthScale,
             height: size.height * Layout.skewerHeightRatio
         )
         let skewerRect = CGRect(
@@ -362,6 +449,8 @@ final class DangoGameScene: SKScene {
                 y: size.height * Layout.skewerCenterYRatio
             )
         }
+
+        updateSkewerGroupPosition()
     }
 
     private func addNextDisplay() {
@@ -396,42 +485,275 @@ final class DangoGameScene: SKScene {
         )
     }
 
-    private func addFailureHUD() {
-        failureIndicatorNodes = (0..<FailureParameters.maximumCount).map { _ in
+    // DEBUG: 正式なStage Select実装時に、このブロックとNodeNameのdebug項目を削除する。
+    private func addDebugStageControls() {
+        let previousButton = makeDebugStageButton(
+            text: "‹",
+            nodeName: NodeName.debugPreviousStage
+        )
+        addChild(previousButton)
+        debugPreviousStageButton = previousButton
+
+        let stageLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        stageLabel.fontSize = StageDisplayParameters.debugNumberFontSize
+        stageLabel.fontColor = Appearance.skewerColor
+        stageLabel.horizontalAlignmentMode = .center
+        stageLabel.verticalAlignmentMode = .center
+        stageLabel.zPosition = 30
+        addChild(stageLabel)
+        debugStageNumberLabel = stageLabel
+
+        let nextButton = makeDebugStageButton(
+            text: "›",
+            nodeName: NodeName.debugNextStage
+        )
+        addChild(nextButton)
+        debugNextStageButton = nextButton
+
+        updateDebugStageControls()
+    }
+
+    private func makeDebugStageButton(text: String, nodeName: String) -> SKShapeNode {
+        let button = SKShapeNode(
+            rectOf: StageDisplayParameters.debugButtonSize,
+            cornerRadius: 6
+        )
+        button.name = nodeName
+        button.fillColor = Appearance.skewerColor.withAlphaComponent(0.08)
+        button.strokeColor = Appearance.skewerColor
+        button.lineWidth = 1
+        button.zPosition = 30
+
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.name = nodeName
+        label.text = text
+        label.fontSize = StageDisplayParameters.debugButtonFontSize
+        label.fontColor = Appearance.skewerColor
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+        button.addChild(label)
+        return button
+    }
+
+    private func layoutDebugStageControls() {
+        let yPosition = size.height * StageDisplayParameters.debugControlYRatio
+        debugPreviousStageButton?.position = CGPoint(
+            x: size.width * StageDisplayParameters.debugPreviousXRatio,
+            y: yPosition
+        )
+        debugStageNumberLabel?.position = CGPoint(
+            x: size.width * StageDisplayParameters.debugNumberXRatio,
+            y: yPosition
+        )
+        debugNextStageButton?.position = CGPoint(
+            x: size.width * StageDisplayParameters.debugNextXRatio,
+            y: yPosition
+        )
+    }
+
+    private func updateDebugStageControls() {
+        debugStageNumberLabel?.text = "S\(stageManager.currentStageNumber)"
+        debugPreviousStageButton?.alpha = stageManager.previousConfig == nil
+            ? StageDisplayParameters.debugDisabledAlpha
+            : StageDisplayParameters.debugEnabledAlpha
+        debugNextStageButton?.alpha = stageManager.nextConfig == nil
+            ? StageDisplayParameters.debugDisabledAlpha
+            : StageDisplayParameters.debugEnabledAlpha
+    }
+
+    private func handleStageControl(at location: CGPoint) -> Bool {
+        let hitNodeNames = nodes(at: location).compactMap { node in
+            node.name ?? node.parent?.name
+        }
+
+        if hitNodeNames.contains(NodeName.debugPreviousStage) {
+            guard stageManager.moveToPreviousStage() else { return true }
+            resetGame()
+            return true
+        }
+
+        if hitNodeNames.contains(NodeName.debugNextStage) {
+            guard stageManager.moveToNextStage() else { return true }
+            resetGame()
+            return true
+        }
+
+        if hitNodeNames.contains(NodeName.resultNextStage) {
+            guard case .stageCleared = gameState else { return true }
+            guard stageManager.moveToNextStage() else { return true }
+            resetGame()
+            return true
+        }
+
+        return false
+    }
+
+    private func showStageStartLabel() {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = "STAGE \(stageManager.currentStageNumber)"
+        label.fontSize = StageDisplayParameters.startLabelFontSize
+        label.fontColor = Appearance.skewerColor
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+        label.position = CGPoint(
+            x: size.width / 2,
+            y: size.height * StageDisplayParameters.startLabelYRatio
+        )
+        label.zPosition = 15
+        addChild(label)
+
+        label.run(SKAction.sequence([
+            SKAction.wait(forDuration: StageDisplayParameters.startLabelHoldDuration),
+            SKAction.fadeOut(withDuration: StageDisplayParameters.startLabelFadeDuration),
+            SKAction.removeFromParent(),
+        ]))
+    }
+
+    private func addLifeHUD() {
+        lifeIndicatorNodes = (0..<FailureParameters.maximumCount).map { _ in
             let indicator = SKShapeNode(
-                circleOfRadius: FailureParameters.indicatorRadius
+                circleOfRadius: FailureParameters.lifeCircleRadius
             )
-            indicator.strokeColor = Appearance.skewerColor
-            indicator.lineWidth = FailureParameters.indicatorLineWidth
+            indicator.fillColor = FailureParameters.lifeColor
+            indicator.strokeColor = FailureParameters.lifeColor
+            indicator.lineWidth = FailureParameters.lifeCircleLineWidth
             indicator.zPosition = 10
             addChild(indicator)
             return indicator
         }
 
-        updateFailureHUD()
+        resetLifeHUDPresentation()
     }
 
-    private func layoutFailureHUD() {
-        let indicatorCount = CGFloat(failureIndicatorNodes.count)
-        let totalWidth = FailureParameters.indicatorSpacing * (indicatorCount - 1)
+    private func layoutLifeHUD() {
+        let indicatorCount = CGFloat(lifeIndicatorNodes.count)
+        let totalWidth = FailureParameters.lifeCircleSpacing * (indicatorCount - 1)
         let startX = (size.width - totalWidth) / 2
         let centerY = size.height * FailureParameters.indicatorCenterYRatio
 
-        for (index, indicator) in failureIndicatorNodes.enumerated() {
+        for (index, indicator) in lifeIndicatorNodes.enumerated() {
             indicator.position = CGPoint(
-                x: startX + CGFloat(index) * FailureParameters.indicatorSpacing,
+                x: startX + CGFloat(index) * FailureParameters.lifeCircleSpacing,
                 y: centerY
             )
         }
     }
 
-    private func updateFailureHUD() {
-        for (index, indicator) in failureIndicatorNodes.enumerated() {
-            let isUsed = index < totalFailureCount
-            indicator.fillColor = isUsed ? FailureParameters.failedColor : .clear
-            indicator.strokeColor = isUsed
-                ? FailureParameters.failedColor
-                : Appearance.skewerColor
+    private func resetLifeHUDPresentation() {
+        for indicator in lifeIndicatorNodes {
+            indicator.removeAllActions()
+            indicator.removeAllChildren()
+            indicator.isHidden = false
+            indicator.alpha = 1
+            indicator.setScale(1)
+            indicator.fillColor = FailureParameters.lifeColor
+            indicator.strokeColor = FailureParameters.lifeColor
+        }
+    }
+
+    private func breakLifeIndicator(forFailureCount failureCount: Int) {
+        let lifeIndex = FailureParameters.maximumCount - failureCount
+        guard lifeIndicatorNodes.indices.contains(lifeIndex) else { return }
+
+        let indicator = lifeIndicatorNodes[lifeIndex]
+        let crackNode = makeLifeCrackNode()
+        crackNode.alpha = 0
+        indicator.addChild(crackNode)
+
+        let expandDuration = FailureParameters.lifeBreakDuration * 0.20
+        let shakeStepDuration = FailureParameters.lifeBreakDuration * 0.075
+        let disappearDuration = FailureParameters.lifeBreakDuration
+            - expandDuration
+            - shakeStepDuration * 4
+
+        let expandAction = SKAction.scale(
+            to: FailureParameters.lifeBreakScale,
+            duration: expandDuration
+        )
+        expandAction.timingMode = .easeOut
+
+        let shakeAmount = FailureParameters.lifeShakeAmount
+        let shakeAction = SKAction.sequence([
+            SKAction.moveBy(x: shakeAmount, y: 0, duration: shakeStepDuration),
+            SKAction.moveBy(x: -shakeAmount * 2, y: 0, duration: shakeStepDuration),
+            SKAction.moveBy(x: shakeAmount * 2, y: 0, duration: shakeStepDuration),
+            SKAction.moveBy(x: -shakeAmount, y: 0, duration: shakeStepDuration),
+        ])
+
+        let disappearAction = SKAction.group([
+            SKAction.scale(to: 0.1, duration: disappearDuration),
+            SKAction.fadeOut(withDuration: disappearDuration),
+        ])
+        disappearAction.timingMode = .easeIn
+
+        indicator.run(SKAction.sequence([
+            expandAction,
+            SKAction.run { crackNode.alpha = 1 },
+            shakeAction,
+            SKAction.run { [weak self, weak indicator] in
+                guard let self, let indicator else { return }
+                self.emitLifeFragments(from: indicator.position)
+            },
+            disappearAction,
+            SKAction.hide(),
+        ]))
+    }
+
+    private func makeLifeCrackNode() -> SKShapeNode {
+        let radius = FailureParameters.lifeCircleRadius
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: 1))
+        path.addLine(to: CGPoint(x: -radius * 0.28, y: radius * 0.34))
+        path.addLine(to: CGPoint(x: -radius * 0.58, y: radius * 0.66))
+        path.move(to: CGPoint(x: 0, y: 1))
+        path.addLine(to: CGPoint(x: radius * 0.34, y: radius * 0.08))
+        path.addLine(to: CGPoint(x: radius * 0.70, y: radius * 0.18))
+        path.move(to: CGPoint(x: 0, y: 1))
+        path.addLine(to: CGPoint(x: radius * 0.08, y: -radius * 0.38))
+        path.addLine(to: CGPoint(x: -radius * 0.18, y: -radius * 0.72))
+
+        let crackNode = SKShapeNode(path: path)
+        crackNode.strokeColor = FailureParameters.crackColor
+        crackNode.lineWidth = 1.2
+        crackNode.lineCap = .round
+        crackNode.zPosition = 1
+        return crackNode
+    }
+
+    private func emitLifeFragments(from position: CGPoint) {
+        let fragmentCount = max(FailureParameters.lifeFragmentCount, 1)
+        let fragmentRadius = FailureParameters.lifeCircleRadius * 0.28
+
+        for index in 0..<fragmentCount {
+            let angle = CGFloat(index) / CGFloat(fragmentCount) * .pi * 2 + 0.35
+            let fragment = SKShapeNode(circleOfRadius: fragmentRadius)
+            fragment.fillColor = FailureParameters.lifeColor
+            fragment.strokeColor = FailureParameters.lifeColor
+            fragment.position = position
+            fragment.zPosition = 11
+            addChild(fragment)
+
+            let distance = FailureParameters.lifeFragmentDistance
+            let destinationOffset = CGVector(
+                dx: cos(angle) * distance,
+                dy: sin(angle) * distance
+            )
+            let fragmentAction = SKAction.group([
+                SKAction.moveBy(
+                    x: destinationOffset.dx,
+                    y: destinationOffset.dy,
+                    duration: FailureParameters.lifeFragmentDuration
+                ),
+                SKAction.fadeOut(
+                    withDuration: FailureParameters.lifeFragmentDuration
+                ),
+                SKAction.scale(
+                    to: 0.2,
+                    duration: FailureParameters.lifeFragmentDuration
+                ),
+            ])
+            fragmentAction.timingMode = .easeOut
+            fragment.run(SKAction.sequence([fragmentAction, SKAction.removeFromParent()]))
         }
     }
 
@@ -460,12 +782,11 @@ final class DangoGameScene: SKScene {
         guard let dango else { return }
 
         let horizontalRange = dangoHorizontalRange
-        dango.position.x = min(
-            max(dango.position.x, horizontalRange.lowerBound),
-            horizontalRange.upperBound
-        )
-
         if case .movingHorizontally = dangoState {
+            dango.position.x = min(
+                max(dango.position.x, horizontalRange.lowerBound),
+                horizontalRange.upperBound
+            )
             dango.position.y = size.height * DangoParameters.spawnYRatio
         }
     }
@@ -522,7 +843,9 @@ final class DangoGameScene: SKScene {
     private func updateHorizontalMovement(of dango: SKShapeNode, frameDuration: CGFloat) {
         let horizontalRange = dangoHorizontalRange
         var nextX = dango.position.x
-            + DangoParameters.horizontalSpeed * horizontalDirection * frameDuration
+            + currentStageConfig.dangoHorizontalSpeed
+                * horizontalDirection
+                * frameDuration
 
         if nextX >= horizontalRange.upperBound {
             nextX = horizontalRange.upperBound
@@ -533,6 +856,24 @@ final class DangoGameScene: SKScene {
         }
 
         dango.position.x = nextX
+    }
+
+    private func updateSkewerMovement(frameDuration: CGFloat) {
+        let config = currentStageConfig
+        guard config.skewerMovementAmount > 0,
+              config.skewerMovementSpeed > 0 else {
+            skewerGroupNode?.position.x = 0
+            return
+        }
+
+        skewerMovementPhase += config.skewerMovementSpeed * frameDuration
+        skewerMovementPhase.formTruncatingRemainder(dividingBy: .pi * 2)
+        updateSkewerGroupPosition()
+    }
+
+    private func updateSkewerGroupPosition() {
+        let movementAmount = size.width * currentStageConfig.skewerMovementAmount
+        skewerGroupNode?.position.x = sin(skewerMovementPhase) * movementAmount
     }
 
     private func updateFallingMovement(of dango: SKShapeNode, frameDuration: CGFloat) {
@@ -589,11 +930,13 @@ final class DangoGameScene: SKScene {
 
         hasJudgedCurrentDango = true
 
-        let skewerCenterXs = skewerStates.map { size.width * $0.xPositionRatio }
+        let skewerCenterXs = currentSkewerCenterXs
         let result = HitJudge.judge(
             dangoX: dango.position.x,
             dangoDiameter: DangoParameters.diameter,
-            skewerCenterXs: skewerCenterXs
+            skewerCenterXs: skewerCenterXs,
+            perfectThresholdScale: currentStageConfig.perfectJudgeScale,
+            goodThresholdScale: currentStageConfig.goodJudgeScale
         )
 
         print("[HitJudge] \(debugText(for: result))")
@@ -685,10 +1028,17 @@ final class DangoGameScene: SKScene {
         targetSkewerIndex: Int,
         targetSkewerX: CGFloat
     ) {
+        guard let skewerGroupNode else { return }
+
         let stackLevel = skewerStates[targetSkewerIndex].dangoCount
         let underlyingDango = skewerStates[targetSkewerIndex].dangoNodes.last
         guard skewerStates[targetSkewerIndex].addDangoNode(dango) else { return }
         recordSuccessfulLanding(result)
+
+        let dangoScenePosition = dango.position
+        dango.removeFromParent()
+        skewerGroupNode.addChild(dango)
+        dango.position = skewerGroupNode.convert(dangoScenePosition, from: self)
 
         let isPerfect: Bool
         let feedbackKind: JudgeFeedbackKind
@@ -702,11 +1052,12 @@ final class DangoGameScene: SKScene {
 
         dangoState = .stuck
 
-        let targetPosition = CGPoint(
+        let targetScenePosition = CGPoint(
             x: snappedX(for: result, skewerCenterX: targetSkewerX),
             y: stackedDangoY(for: stackLevel)
                 + LandingAnimationParameters.stuckCenterYOffset
         )
+        let targetPosition = skewerGroupNode.convert(targetScenePosition, from: self)
         let snapAction = SKAction.move(
             to: targetPosition,
             duration: LandingAnimationParameters.snapDuration
@@ -757,9 +1108,13 @@ final class DangoGameScene: SKScene {
 
         let impactAction = SKAction.run { [weak self, weak underlyingDango] in
             guard let self else { return }
+            let skewerCenterXs = self.currentSkewerCenterXs
+            let currentTargetX = skewerCenterXs.indices.contains(targetSkewerIndex)
+                ? skewerCenterXs[targetSkewerIndex]
+                : targetSkewerX
             self.showJudgeFeedback(
                 feedbackKind,
-                at: self.judgeFeedbackPosition(targetSkewerX: targetSkewerX)
+                at: self.judgeFeedbackPosition(targetSkewerX: currentTargetX)
             )
             self.triggerHaptic(for: feedbackKind)
 
@@ -768,7 +1123,7 @@ final class DangoGameScene: SKScene {
             }
 
             if isPerfect {
-                self.showPerfectRing(at: targetPosition)
+                self.showPerfectRing(at: targetPosition, in: skewerGroupNode)
             }
         }
 
@@ -825,22 +1180,33 @@ final class DangoGameScene: SKScene {
             wrongCount: wrongCount
         )
         stageResult = result
+        let isAllStagesClear = stageManager.nextConfig == nil
         showStageResult(
-            title: "STAGE CLEAR!",
+            title: isAllStagesClear ? "ALL STAGES CLEAR!" : "STAGE CLEAR!",
             titleColor: Appearance.skewerColor,
-            evaluation: result
+            evaluation: result,
+            titleFontSize: isAllStagesClear
+                ? StageDisplayParameters.allStagesClearFontSize
+                : StageResultDisplayParameters.titleLabelFontSize
         )
     }
 
     private func showStageFailed() {
         gameState = .stageFailed
-        showStageResult(title: "STAGE FAILED", titleColor: FailureParameters.failedColor)
+        showStageResult(
+            title: "STAGE FAILED",
+            titleColor: FailureParameters.lifeColor,
+            revealDelay: 0,
+            titleFontSize: StageResultDisplayParameters.titleLabelFontSize
+        )
     }
 
     private func showStageResult(
         title: String,
         titleColor: SKColor,
-        evaluation: StageResult? = nil
+        evaluation: StageResult? = nil,
+        revealDelay: TimeInterval = StageResultDisplayParameters.revealDelay,
+        titleFontSize: CGFloat
     ) {
         guard stageResultNode == nil else { return }
 
@@ -860,7 +1226,7 @@ final class DangoGameScene: SKScene {
 
         let titleLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         titleLabel.text = title
-        titleLabel.fontSize = StageResultDisplayParameters.titleLabelFontSize
+        titleLabel.fontSize = titleFontSize
         titleLabel.fontColor = titleColor
         titleLabel.horizontalAlignmentMode = .center
         titleLabel.verticalAlignmentMode = .center
@@ -870,13 +1236,34 @@ final class DangoGameScene: SKScene {
             addEvaluationDisplay(evaluation, to: container)
         }
 
+        let nextStageYOffset: CGFloat?
+        if let evaluation, stageManager.nextConfig != nil {
+            let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+            label.name = NodeName.resultNextStage
+            label.text = "NEXT STAGE"
+            label.fontSize = StageDisplayParameters.nextStageFontSize
+            label.fontColor = Appearance.perfectFeedbackColor
+            label.horizontalAlignmentMode = .center
+            label.verticalAlignmentMode = .center
+            label.position.y = evaluation.isPerfectClear
+                ? StageDisplayParameters.perfectClearNextStageYOffset
+                : StageDisplayParameters.nextStageYOffset
+            container.addChild(label)
+            nextStageYOffset = label.position.y
+        } else {
+            nextStageYOffset = nil
+        }
+
         let retryLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
         retryLabel.text = "TAP TO RETRY"
         retryLabel.fontSize = StageResultDisplayParameters.retryLabelFontSize
         retryLabel.fontColor = Appearance.skewerColor
         retryLabel.horizontalAlignmentMode = .center
         retryLabel.verticalAlignmentMode = .center
-        if let evaluation {
+        if let nextStageYOffset {
+            retryLabel.position.y = nextStageYOffset
+                - StageDisplayParameters.nextStageRetrySpacing
+        } else if let evaluation {
             retryLabel.position.y = evaluation.isPerfectClear
                 ? StageResultDisplayParameters.perfectClearRetryLabelYOffset
                 : StageResultDisplayParameters.evaluatedRetryLabelYOffset
@@ -894,7 +1281,7 @@ final class DangoGameScene: SKScene {
         ])
         revealAction.timingMode = .easeOut
         container.run(SKAction.sequence([
-            SKAction.wait(forDuration: StageResultDisplayParameters.revealDelay),
+            SKAction.wait(forDuration: revealDelay),
             revealAction,
         ]))
     }
@@ -919,8 +1306,6 @@ final class DangoGameScene: SKScene {
         let detailLines = [
             "PERFECT \(result.perfectCount)",
             "GOOD \(result.goodCount)",
-            "MISS \(result.missCount)",
-            "WRONG \(result.wrongCount)",
         ]
         let detailFirstYOffset = result.isPerfectClear
             ? StageResultDisplayParameters.perfectClearDetailFirstYOffset
@@ -1017,7 +1402,7 @@ final class DangoGameScene: SKScene {
             fontSize = JudgeFeedbackParameters.standardFontSize
             initialScale = JudgeFeedbackParameters.standardInitialScale
             popScale = JudgeFeedbackParameters.failurePopScale
-            color = FailureParameters.failedColor
+            color = FailureParameters.lifeColor
         case .miss:
             text = "MISS"
             fontSize = JudgeFeedbackParameters.standardFontSize
@@ -1085,7 +1470,7 @@ final class DangoGameScene: SKScene {
         }
     }
 
-    private func showPerfectRing(at position: CGPoint) {
+    private func showPerfectRing(at position: CGPoint, in parentNode: SKNode) {
         let ring = SKShapeNode(circleOfRadius: DangoParameters.diameter / 2)
         ring.fillColor = .clear
         ring.strokeColor = Appearance.perfectFeedbackColor
@@ -1093,7 +1478,7 @@ final class DangoGameScene: SKScene {
         ring.position = position
         ring.zPosition = 2
         ring.setScale(JudgeFeedbackParameters.perfectRingInitialScale)
-        addChild(ring)
+        parentNode.addChild(ring)
 
         let expandAction = SKAction.scale(
             to: JudgeFeedbackParameters.perfectRingFinalScale,
@@ -1242,10 +1627,21 @@ final class DangoGameScene: SKScene {
             "[Failure] \(failureKind.rawValue): "
                 + "\(totalFailureCount)/\(FailureParameters.maximumCount)"
         )
-        updateFailureHUD()
+        breakLifeIndicator(forFailureCount: totalFailureCount)
 
         if totalFailureCount >= FailureParameters.maximumCount {
-            showStageFailed()
+            gameState = .stageFailedPending
+            run(
+                SKAction.sequence([
+                    SKAction.wait(
+                        forDuration: FailureParameters.failedDelayAfterLastLife
+                    ),
+                    SKAction.run { [weak self] in
+                        self?.showStageFailed()
+                    },
+                ]),
+                withKey: "showStageFailedAfterLastLife"
+            )
         } else {
             respawnTimeRemaining = DangoParameters.respawnDelay
         }
@@ -1263,6 +1659,10 @@ final class DangoGameScene: SKScene {
 
     private var skewerRequiredColors: [DangoColor?] {
         skewerStates.map(\.nextRequiredColor)
+    }
+
+    private var currentSkewerCenterXs: [CGFloat] {
+        skewers.map { $0.convert(.zero, to: self).x }
     }
 
     private var totalFailureCount: Int {
@@ -1285,6 +1685,10 @@ final class DangoGameScene: SKScene {
         case .miss:
             return "MISS"
         }
+    }
+
+    private var currentStageConfig: StageConfig {
+        stageManager.currentConfig
     }
 
     private var dangoHorizontalRange: ClosedRange<CGFloat> {

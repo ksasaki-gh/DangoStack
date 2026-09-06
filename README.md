@@ -1,3 +1,82 @@
+Task 14.1を実装しました。21ステージをA/B/Cの7セクション構成へ変更し、XcodeビルドとSimulator起動を確認済みです。
+変更ファイル：
+- [StageConfig.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift)
+- [HitJudge.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift)
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+1. A / B / Cの調整値
+   [StageConfig.swift (line 26)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift:26) に集約しています。
+   - A：基準速度140と、1.10 / 1.25 / 1.40
+   - B：移動量2% / 3.5% / 5%、周期5.0 / 4.2 / 3.5秒
+   - C：串幅・PERFECT・GOOD倍率0.90 / 0.80 / 0.70
+2. Stage 1～21の設定
+   [StageConfigs.all (line 51)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift:51) に、7セクション×3ステージとして定義しています。各ステージはconfig(21, a: .level3, b: .level3, c: .level3)のように確認できます。
+3. 通常の串幅
+   [DangoGameScene.swift (line 46)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:46) のLayout.skewerWidthRatio = 0.030で変更できます。Cなしでは常に倍率1.0です。
+4. Cの串幅倍率
+   [StageConfig.swift (line 41)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift:41) のcLevel1/2/3SkewerWidthScaleで変更できます。実際の描画幅へ乗算しています。
+5. Cの判定倍率
+   cLevel1/2/3PerfectJudgeScaleとcLevel1/2/3GoodJudgeScaleで調整します。[HitJudge.swift (line 36)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HitJudge.swift:36) で基準値20%／38%へ乗算しています。GOOD LEFT／RIGHTは維持しています。
+6. Stage 21の難易度調整
+   Level 3の以下を変更します。
+   - A：aLevel3SpeedMultiplier
+   - B：bLevel3MovementAmountとbLevel3CycleDuration
+   - C：cLevel3SkewerWidthScale、cLevel3PerfectJudgeScale、cLevel3GoodJudgeScale
+   周期は長くすると簡単、短くすると難しくなります。C倍率は大きくすると簡単、小さくすると難しくなります。
+旧難易度要素のdangoMovementWidthとusesSmoothAccelerationは削除しました。団子の移動幅は全ステージ共通、タップ前は一定速度往復です。タップ後の加速落下、着弾演出、CURRENT／NEXT、ライフ、評価処理には変更を加えていません。
+
+Task 14を実装しました。21件のStageConfigを確認し、Xcodeビルド成功、iPhone SimulatorでStage 1とデバッグ切り替えUIの表示を確認済みです。
+変更ファイル：
+- [StageConfig.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift)
+- [StageManager.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageManager.swift)
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+1. StageConfig
+   [StageConfig.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift:8) に、ステージ番号、団子速度・移動幅、串移動量・速度、滑らかな加減速の有無を定義しました。
+2. 21ステージの数値
+   [StageConfigs.all (line 28)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift:28) に集約しています。基準速度は140pt/s、標準移動幅は画面幅の64%です。縦方向の落下設定はStageConfigへ含めず、従来値を全ステージ共通にしています。
+3. StageManager
+   [StageManager.swift (line 6)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageManager.swift:6) が現在のステージ番号、現在・前後のConfig取得、1〜21の範囲チェックを担当します。
+4. 串移動
+   3本の串を共通のskewerGroupNodeへ入れ、sin周期でグループ全体を左右移動させています。刺さった団子も着弾時に同じ親ノードへ移すため、一緒に移動します。判定には初期比率ではなく、現在表示中の串のシーン座標を使用します。
+5. 加減速移動
+   [updateSmoothHorizontalMovement() (line 872)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:872) でsin波を使用しています。端で減速・反転し、中央へ向かって加速します。一定速度ステージと端から端までの所要時間が大きく変わらないよう調整しています。
+6. ステージ変更とリセット
+   [resetGame() (line 355)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:355) で旧ノードと子孫Actionを停止・削除してから再構築します。StageManager自体は保持するため、Retryでは同じステージ、NEXT STAGEでは次のConfigが適用されます。
+7. 調整しやすい値
+   主に以下を変更します。
+   - 全体基準速度：baseHorizontalSpeed
+   - 標準移動幅：standardMovementWidth
+   - 個別速度：各Configのspeed
+   - 個別移動幅：width
+   - 串移動量：skewerAmount
+   - 串移動速度：skewerSpeed
+   - 加減速の有無：smooth
+DEBUGビルドでは左上の矢印で任意ステージへ移動できます。開始時にはSTAGE nを短時間表示し、クリア後はNEXT STAGE、Stage 21ではALL STAGES CLEAR!を表示します。
+
+Task 13.4を実装しました。Xcodeビルド成功、iPhone Simulatorで起動し、画面下部に赤いライフ3個が表示されることを確認済みです。
+変更ファイル：
+- [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)
+1. リザルト表示
+   [addEvaluationDisplay() (line 1030)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:1030) からMISS／WRONG行を削除し、PERFECT／GOODのみ表示します。内部カウントと評価判定は維持しています。
+2. ライフUI
+   [addLifeHUD() (line 413)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:413) で赤い円を3個生成し、[layoutLifeHUD() (line 429)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:429) で画面下部中央へ配置します。失敗時は右端から消費します。
+3. 割れるアニメーション
+   [breakLifeIndicator() (line 455)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:455) で以下を実行します。
+   拡大 → ひび表示 → 小さく揺れる → 赤い破片を放出 → 縮小・フェードアウト
+   ひびは makeLifeCrackNode()、破片は emitLifeFragments()でSpriteKit図形として生成しています。
+4. 調整値
+   [FailureParameters (line 167)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:167) にまとめています。
+   - 円サイズ：lifeCircleRadius
+   - 間隔：lifeCircleSpacing
+   - 全体時間：lifeBreakDuration
+   - 拡大量：lifeBreakScale
+   - 揺れ幅：lifeShakeAmount
+   - 破片数：lifeFragmentCount
+   - 飛距離：lifeFragmentDistance
+   - 破片時間：lifeFragmentDuration
+5. FAILEDまでの待機
+   failedDelayAfterLastLife = 0.27秒で調整できます。3回目の失敗時は即座にゲーム進行を停止し、最後のライフ破壊が見えたあとFAILED表示を開始します。
+Retryでは既存ノード・アクション・破片・ひびをすべて削除したうえで、alpha／scaleが初期状態のライフ3個を再生成します。星評価、PERFECT CLEAR、CURRENT／NEXTなどのゲームロジックは変更していません。
+
 Task 13.3を実装しました。Xcodeビルド成功、iPhone Simulatorへのインストール・起動も確認済みです。
 変更ファイル：
 - [DangoGameScene.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift)

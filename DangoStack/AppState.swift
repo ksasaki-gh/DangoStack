@@ -18,58 +18,29 @@ enum GameOutcome: Equatable {
     case failed
 }
 
-struct StageProgress: Equatable {
-    private(set) var highestUnlockedStage = 1
-    private(set) var bestStarsByStage: [Int: Int] = [:]
-    private(set) var perfectClearStages: Set<Int> = []
-
-    var hasClearedAllStages: Bool {
-        bestStarsByStage[StageManager.validStageNumbers.upperBound] != nil
-    }
-
-    func isUnlocked(_ stageNumber: Int) -> Bool {
-        StageManager.isValid(stageNumber: stageNumber)
-            && stageNumber <= highestUnlockedStage
-    }
-
-    func bestStars(for stageNumber: Int) -> Int? {
-        bestStarsByStage[stageNumber]
-    }
-
-    func hasPerfectClear(for stageNumber: Int) -> Bool {
-        perfectClearStages.contains(stageNumber)
-    }
-
-    mutating func recordClear(stageNumber: Int, result: StageResult) {
-        guard StageManager.isValid(stageNumber: stageNumber) else { return }
-
-        let previousBest = bestStarsByStage[stageNumber] ?? 0
-        bestStarsByStage[stageNumber] = max(previousBest, result.stars)
-
-        if result.isPerfectClear {
-            perfectClearStages.insert(stageNumber)
-        }
-
-        if stageNumber < StageManager.validStageNumbers.upperBound {
-            highestUnlockedStage = max(highestUnlockedStage, stageNumber + 1)
-        }
-    }
-}
-
 @MainActor
 final class AppState: ObservableObject {
     @Published private(set) var screen = AppScreen.title
     @Published private(set) var selectedStageNumber = 1
     @Published private(set) var latestOutcome: GameOutcome?
-    @Published private(set) var progress = StageProgress()
+
+    let saveManager: SaveManager
+
+    init() {
+        saveManager = SaveManager()
+    }
+
+    init(saveManager: SaveManager) {
+        self.saveManager = saveManager
+    }
 
     func play() {
-        guard !progress.hasClearedAllStages else {
+        guard !saveManager.hasClearedAllStages else {
             showStageSelect()
             return
         }
 
-        startStage(progress.highestUnlockedStage)
+        startStage(saveManager.unlockedStage)
     }
 
     func showTitle() {
@@ -83,16 +54,14 @@ final class AppState: ObservableObject {
     }
 
     func selectStage(_ stageNumber: Int) {
-        guard progress.isUnlocked(stageNumber) else { return }
+        guard saveManager.isUnlocked(stageNumber) else { return }
         startStage(stageNumber)
     }
 
     func receiveStageClear(_ result: StageResult, stageNumber: Int) {
         guard screen == .game, selectedStageNumber == stageNumber else { return }
 
-        var updatedProgress = progress
-        updatedProgress.recordClear(stageNumber: stageNumber, result: result)
-        progress = updatedProgress
+        saveManager.recordStageClear(stageNumber: stageNumber, result: result)
         latestOutcome = .cleared(result)
         screen = .result
     }
@@ -110,7 +79,7 @@ final class AppState: ObservableObject {
 
     func playNextStage() {
         let nextStageNumber = selectedStageNumber + 1
-        guard progress.isUnlocked(nextStageNumber) else { return }
+        guard saveManager.isUnlocked(nextStageNumber) else { return }
         startStage(nextStageNumber)
     }
 

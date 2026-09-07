@@ -1,3 +1,49 @@
+Task 16を実装しました。UserDefaultsによる進捗保存、再起動後の読み込み、破損時フォールバックを確認済みです。
+実装内容
+1. SaveManager
+[SaveManager.swift (line 110)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SaveManager.swift:110)を追加しました。
+- 読み込み・更新・保存を集約
+- ObservableObjectで画面へ変更通知
+- 初回データの自動生成
+- 不正値の1〜21／0〜3への補正
+- デコード失敗時は初期状態へ復帰
+2. 保存データ構造
+[SaveManager.swift (line 9)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SaveManager.swift:9)に以下を定義しています。
+- StageProgress
+  - stageNumber
+  - bestStars
+  - isPerfectClear
+- GameProgress
+  - saveVersion
+  - unlockedStage
+  - 21件のStageProgress
+3. UserDefaultsキー
+[SaveManager.swift (line 112)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SaveManager.swift:112)
+dangoStack.gameProgress
+全進捗をJSONエンコードして1つのDataとして保存します。
+4. Stageクリア時の更新
+[AppState.swift (line 61)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/AppState.swift:61)からrecordStageClearを呼び出します。
+[SaveManager.swift (line 159)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SaveManager.swift:159)でBest Stars、PERFECT CLEAR、次Stage解放をまとめて更新・保存します。
+5. PLAYのStage決定
+[AppState.swift (line 37)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/AppState.swift:37)で保存済みunlockedStageを使用します。Stage 21クリア済みならStage Selectへ移動します。
+6. Stage Select
+[StageSelectView.swift (line 9)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageSelectView.swift:9)がSaveManagerを@ObservedObjectとして監視し、ロック、Best Stars、PERFECT CLEARを自動更新します。
+7. DEBUGリセット
+[SaveManager.swift (line 168)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SaveManager.swift:168)の以下をDEBUGビルドから呼び出せます。
+appState.saveManager.resetProgressForDebug()
+UserDefaultsも初期状態へ更新されます。本番UIには表示していません。
+8. Save Version
+[SaveManager.swift (line 33)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SaveManager.swift:33)のcurrentSaveVersionを変更します。Version 2以降で旧データを維持する場合は、normalizedへマイグレーション分岐を追加します。
+未使用だったSwiftDataテンプレートのItem.swiftも削除しました。
+確認結果：
+- Xcodeビルド成功
+- Simulatorで初期保存データ生成を確認
+- アプリ終了・再起動後もデータ維持
+- 1星→3星→2星でもBest Starsは3
+- PERFECT CLEAR達成後もtrueを維持
+- 破損データから初期状態へ復帰
+- DEBUGリセット動作を確認済み
+
 Task 15を実装しました。正式な画面フローが動作し、XcodeビルドとiPhone 17 Pro Simulatorでの起動を確認済みです。
 実装内容
 - [AppState.swift (line 9)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/AppState.swift:9)

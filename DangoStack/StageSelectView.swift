@@ -8,6 +8,12 @@ import SwiftUI
 
 struct StageSelectView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var saveManager: SaveManager
+
+    init(appState: AppState) {
+        self.appState = appState
+        saveManager = appState.saveManager
+    }
 
     var body: some View {
         ZStack {
@@ -59,9 +65,9 @@ struct StageSelectView: View {
                 let stageNumber = sectionIndex * 3 + columnIndex + 1
                 StageSelectButton(
                     stageNumber: stageNumber,
-                    isUnlocked: appState.progress.isUnlocked(stageNumber),
-                    bestStars: appState.progress.bestStars(for: stageNumber),
-                    isPerfectClear: appState.progress.hasPerfectClear(
+                    isUnlocked: saveManager.isUnlocked(stageNumber),
+                    bestStars: saveManager.bestStars(for: stageNumber),
+                    isPerfectClear: saveManager.hasPerfectClear(
                         for: stageNumber
                     )
                 ) {
@@ -82,7 +88,7 @@ struct StageSelectView: View {
 private struct StageSelectButton: View {
     let stageNumber: Int
     let isUnlocked: Bool
-    let bestStars: Int?
+    let bestStars: Int
     let isPerfectClear: Bool
     let action: () -> Void
 
@@ -139,7 +145,7 @@ private struct StageSelectButton: View {
     }
 
     private var starsText: String {
-        guard let bestStars else { return "---" }
+        guard bestStars > 0 else { return "---" }
         let clampedStars = min(max(bestStars, 0), StageResult.maximumStars)
         return String(repeating: "★", count: clampedStars)
             + String(
@@ -152,7 +158,7 @@ private struct StageSelectButton: View {
         guard isUnlocked else { return "Locked" }
 
         var values = [String]()
-        if let bestStars {
+        if bestStars > 0 {
             values.append("Best \(bestStars) stars")
         } else {
             values.append("Not cleared")

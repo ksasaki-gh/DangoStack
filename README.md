@@ -1,3 +1,39 @@
+Task 15を実装しました。正式な画面フローが動作し、XcodeビルドとiPhone 17 Pro Simulatorでの起動を確認済みです。
+実装内容
+- [AppState.swift (line 9)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/AppState.swift:9)
+  - title / stageSelect / game / resultを管理
+  - 選択中Stage、最新結果、セッション内進行状態を保持
+- [TitleView.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/TitleView.swift:8)
+  - 三色団子ロゴ、PLAY、STAGE SELECTを追加
+- [StageSelectView.swift (line 9)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageSelectView.swift:9)
+  - 21ステージを7行×3列で表示
+  - ロック、Best Stars、PERFECT CLEARの王冠表示とアクセシビリティ情報を追加
+- [ResultView.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/ResultView.swift:8)
+  - CLEAR／FAILED、星、PERFECT／GOOD、PERFECT CLEARを表示
+  - NEXT STAGE、RETRY、STAGE SELECTを実装
+  - Stage 21ではALL STAGES CLEARとTITLEを表示
+- [DangoUIComponents.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoUIComponents.swift:8)
+  - 配色、団子ロゴ、共通ボタン外観を定義
+- [ContentView.swift (line 10)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/ContentView.swift:10)
+  - AppStateに応じて各SwiftUI画面を切り替え
+- [DangoStackApp.swift (line 10)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoStackApp.swift:10)
+  - 起動時にContentView、続いてTitleViewを表示
+- [GameView.swift (line 9)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/GameView.swift:9)
+  - 選択StageからStageManagerを作成し、DangoGameSceneへ渡す構造へ変更
+- [DangoGameScene.swift (line 1005)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:1005)
+  - CLEAR後0.75秒間完成状態を表示してSwiftUIへ結果を通知
+  - FAILEDもSwiftUIへ通知
+  - SpriteKit内のリザルト・Retry・デバッグStage切替UIを削除
+進行状態
+[StageProgress (line 21)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/AppState.swift:21)で以下を管理しています。
+- highestUnlockedStage
+- bestStarsByStage
+- perfectClearStages
+Best Starsは以前の値とのmaxで更新され、PERFECT CLEARは達成StageのSetへ追加するため、再挑戦後も失われません。
+GameSceneからはonStageCleared／onStageFailedコールバックでAppStateへ通知し、StageResultをResultViewへ渡しています。
+次TaskのSaveManagerでは、上記3つの進行情報を永続化すれば現在のセッション内進行をそのまま保存対応へ移行できます。MISS／WRONGなどのプレイ中状態はステージ開始時に初期化されるため、保存対象には含めていません。
+確認結果：xcodebuild成功、Simulatorへのインストール・起動成功。
+
 Task 14.1を実装しました。21ステージをA/B/Cの7セクション構成へ変更し、XcodeビルドとSimulator起動を確認済みです。
 変更ファイル：
 - [StageConfig.swift](/Users/evergreen/Program/xcode/DangoStack/DangoStack/StageConfig.swift)

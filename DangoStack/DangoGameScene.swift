@@ -144,46 +144,13 @@ final class DangoGameScene: SKScene {
         static let startLabelFontSize: CGFloat = 28
         static let startLabelHoldDuration: TimeInterval = 0.55
         static let startLabelFadeDuration: TimeInterval = 0.30
-
-        static let debugControlYRatio: CGFloat = 0.92
-        static let debugPreviousXRatio: CGFloat = 0.07
-        static let debugNumberXRatio: CGFloat = 0.16
-        static let debugNextXRatio: CGFloat = 0.25
-        static let debugButtonSize = CGSize(width: 38, height: 30)
-        static let debugButtonFontSize: CGFloat = 17
-        static let debugNumberFontSize: CGFloat = 13
-        static let debugDisabledAlpha: CGFloat = 0.25
-        static let debugEnabledAlpha: CGFloat = 0.72
-
-        static let nextStageFontSize: CGFloat = 17
-        static let nextStageYOffset: CGFloat = -151
-        static let perfectClearNextStageYOffset: CGFloat = -186
-        static let nextStageRetrySpacing: CGFloat = 34
-        static let allStagesClearFontSize: CGFloat = 31
     }
 
-    private enum StageResultDisplayParameters {
-        static let centerYRatio: CGFloat = 0.68
-        static let titleLabelFontSize: CGFloat = 38
-        static let starsFontSize: CGFloat = 29
-        static let starsYOffset: CGFloat = -50
-        static let perfectClearFontSize: CGFloat = 21
-        static let perfectClearYOffset: CGFloat = -89
-        static let perfectClearInitialScale: CGFloat = 0.88
-        static let perfectClearAnimationDelay: TimeInterval = 0.52
-        static let perfectClearAnimationDuration: TimeInterval = 0.14
-        static let perfectClearAnimationScale: CGFloat = 1.10
-        static let detailLabelFontSize: CGFloat = 15
-        static let detailFirstYOffset: CGFloat = -92
-        static let perfectClearDetailFirstYOffset: CGFloat = -127
-        static let detailLineSpacing: CGFloat = 22
-        static let retryLabelFontSize: CGFloat = 17
-        static let retryLabelYOffset: CGFloat = -52
-        static let evaluatedRetryLabelYOffset: CGFloat = -159
-        static let perfectClearRetryLabelYOffset: CGFloat = -194
-        static let revealDelay: TimeInterval = 0.35
-        static let revealDuration: TimeInterval = 0.20
-        static let initialScale: CGFloat = 0.92
+    private enum OutcomeTransitionParameters {
+        static let clearDelay: TimeInterval = 0.75
+        static let clearBounceDistance: CGFloat = 5
+        static let clearBounceUpDuration: TimeInterval = 0.12
+        static let clearBounceReturnDuration: TimeInterval = 0.16
     }
 
     private enum FailureParameters {
@@ -239,12 +206,6 @@ final class DangoGameScene: SKScene {
         case miss
     }
 
-    private enum NodeName {
-        static let debugPreviousStage = "debugPreviousStage"
-        static let debugNextStage = "debugNextStage"
-        static let resultNextStage = "resultNextStage"
-    }
-
     private var skewerGroupNode: SKNode?
     private var skewers: [SKShapeNode] = []
     private var skewerStates: [SkewerState] = []
@@ -252,10 +213,6 @@ final class DangoGameScene: SKScene {
     private var nextLabelNode: SKLabelNode?
     private var nextPreviewNode: SKShapeNode?
     private var lifeIndicatorNodes: [SKShapeNode] = []
-    private var debugPreviousStageButton: SKShapeNode?
-    private var debugNextStageButton: SKShapeNode?
-    private var debugStageNumberLabel: SKLabelNode?
-    private var stageResultNode: SKNode?
     private var stageManager: StageManager
     private var dangoGenerator = DangoGenerator()
     private var currentDangoColor: DangoColor?
@@ -273,6 +230,8 @@ final class DangoGameScene: SKScene {
     private var perfectCount = 0
     private var goodCount = 0
     private(set) var stageResult: StageResult?
+    var onStageCleared: ((StageResult) -> Void)?
+    var onStageFailed: (() -> Void)?
 
     override init(size: CGSize) {
         stageManager = StageManager()
@@ -297,27 +256,11 @@ final class DangoGameScene: SKScene {
         layoutSkewers()
         layoutNextDisplay()
         layoutLifeHUD()
-        layoutDebugStageControls()
         layoutDangoForCurrentSceneSize()
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        let touchLocation = touch.location(in: self)
-
-        if handleStageControl(at: touchLocation) {
-            return
-        }
-
-        if case .stageCleared = gameState {
-            resetGame()
-            return
-        }
-
-        if case .stageFailed = gameState {
-            resetGame()
-            return
-        }
+        guard case .playing = gameState else { return }
 
         guard let dango else { return }
 
@@ -366,10 +309,6 @@ final class DangoGameScene: SKScene {
         nextLabelNode = nil
         nextPreviewNode = nil
         lifeIndicatorNodes.removeAll()
-        debugPreviousStageButton = nil
-        debugNextStageButton = nil
-        debugStageNumberLabel = nil
-        stageResultNode = nil
 
         dangoGenerator = DangoGenerator()
         currentDangoColor = nil
@@ -392,13 +331,9 @@ final class DangoGameScene: SKScene {
         addSkewers()
         addNextDisplay()
         addLifeHUD()
-#if DEBUG
-        addDebugStageControls()
-#endif
         layoutSkewers()
         layoutNextDisplay()
         layoutLifeHUD()
-        layoutDebugStageControls()
         spawnDango()
         showStageStartLabel()
     }
@@ -483,109 +418,6 @@ final class DangoGameScene: SKScene {
             x: centerX,
             y: labelY - NextDisplayParameters.previewYOffset
         )
-    }
-
-    // DEBUG: 正式なStage Select実装時に、このブロックとNodeNameのdebug項目を削除する。
-    private func addDebugStageControls() {
-        let previousButton = makeDebugStageButton(
-            text: "‹",
-            nodeName: NodeName.debugPreviousStage
-        )
-        addChild(previousButton)
-        debugPreviousStageButton = previousButton
-
-        let stageLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        stageLabel.fontSize = StageDisplayParameters.debugNumberFontSize
-        stageLabel.fontColor = Appearance.skewerColor
-        stageLabel.horizontalAlignmentMode = .center
-        stageLabel.verticalAlignmentMode = .center
-        stageLabel.zPosition = 30
-        addChild(stageLabel)
-        debugStageNumberLabel = stageLabel
-
-        let nextButton = makeDebugStageButton(
-            text: "›",
-            nodeName: NodeName.debugNextStage
-        )
-        addChild(nextButton)
-        debugNextStageButton = nextButton
-
-        updateDebugStageControls()
-    }
-
-    private func makeDebugStageButton(text: String, nodeName: String) -> SKShapeNode {
-        let button = SKShapeNode(
-            rectOf: StageDisplayParameters.debugButtonSize,
-            cornerRadius: 6
-        )
-        button.name = nodeName
-        button.fillColor = Appearance.skewerColor.withAlphaComponent(0.08)
-        button.strokeColor = Appearance.skewerColor
-        button.lineWidth = 1
-        button.zPosition = 30
-
-        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        label.name = nodeName
-        label.text = text
-        label.fontSize = StageDisplayParameters.debugButtonFontSize
-        label.fontColor = Appearance.skewerColor
-        label.horizontalAlignmentMode = .center
-        label.verticalAlignmentMode = .center
-        button.addChild(label)
-        return button
-    }
-
-    private func layoutDebugStageControls() {
-        let yPosition = size.height * StageDisplayParameters.debugControlYRatio
-        debugPreviousStageButton?.position = CGPoint(
-            x: size.width * StageDisplayParameters.debugPreviousXRatio,
-            y: yPosition
-        )
-        debugStageNumberLabel?.position = CGPoint(
-            x: size.width * StageDisplayParameters.debugNumberXRatio,
-            y: yPosition
-        )
-        debugNextStageButton?.position = CGPoint(
-            x: size.width * StageDisplayParameters.debugNextXRatio,
-            y: yPosition
-        )
-    }
-
-    private func updateDebugStageControls() {
-        debugStageNumberLabel?.text = "S\(stageManager.currentStageNumber)"
-        debugPreviousStageButton?.alpha = stageManager.previousConfig == nil
-            ? StageDisplayParameters.debugDisabledAlpha
-            : StageDisplayParameters.debugEnabledAlpha
-        debugNextStageButton?.alpha = stageManager.nextConfig == nil
-            ? StageDisplayParameters.debugDisabledAlpha
-            : StageDisplayParameters.debugEnabledAlpha
-    }
-
-    private func handleStageControl(at location: CGPoint) -> Bool {
-        let hitNodeNames = nodes(at: location).compactMap { node in
-            node.name ?? node.parent?.name
-        }
-
-        if hitNodeNames.contains(NodeName.debugPreviousStage) {
-            guard stageManager.moveToPreviousStage() else { return true }
-            resetGame()
-            return true
-        }
-
-        if hitNodeNames.contains(NodeName.debugNextStage) {
-            guard stageManager.moveToNextStage() else { return true }
-            resetGame()
-            return true
-        }
-
-        if hitNodeNames.contains(NodeName.resultNextStage) {
-            guard case .stageCleared = gameState else { return true }
-            guard stageManager.moveToNextStage() else { return true }
-            resetGame()
-            return true
-        }
-
-        return false
     }
 
     private func showStageStartLabel() {
@@ -1180,180 +1012,37 @@ final class DangoGameScene: SKScene {
             wrongCount: wrongCount
         )
         stageResult = result
-        let isAllStagesClear = stageManager.nextConfig == nil
-        showStageResult(
-            title: isAllStagesClear ? "ALL STAGES CLEAR!" : "STAGE CLEAR!",
-            titleColor: Appearance.skewerColor,
-            evaluation: result,
-            titleFontSize: isAllStagesClear
-                ? StageDisplayParameters.allStagesClearFontSize
-                : StageResultDisplayParameters.titleLabelFontSize
+        nextLabelNode?.isHidden = true
+        nextPreviewNode?.isHidden = true
+
+        let bounceUp = SKAction.moveBy(
+            x: 0,
+            y: OutcomeTransitionParameters.clearBounceDistance,
+            duration: OutcomeTransitionParameters.clearBounceUpDuration
+        )
+        bounceUp.timingMode = .easeOut
+        let bounceBack = SKAction.moveBy(
+            x: 0,
+            y: -OutcomeTransitionParameters.clearBounceDistance,
+            duration: OutcomeTransitionParameters.clearBounceReturnDuration
+        )
+        bounceBack.timingMode = .easeInEaseOut
+        skewerGroupNode?.run(SKAction.sequence([bounceUp, bounceBack]))
+
+        run(
+            SKAction.sequence([
+                SKAction.wait(forDuration: OutcomeTransitionParameters.clearDelay),
+                SKAction.run { [weak self] in
+                    self?.onStageCleared?(result)
+                },
+            ]),
+            withKey: "notifyStageCleared"
         )
     }
 
     private func showStageFailed() {
         gameState = .stageFailed
-        showStageResult(
-            title: "STAGE FAILED",
-            titleColor: FailureParameters.lifeColor,
-            revealDelay: 0,
-            titleFontSize: StageResultDisplayParameters.titleLabelFontSize
-        )
-    }
-
-    private func showStageResult(
-        title: String,
-        titleColor: SKColor,
-        evaluation: StageResult? = nil,
-        revealDelay: TimeInterval = StageResultDisplayParameters.revealDelay,
-        titleFontSize: CGFloat
-    ) {
-        guard stageResultNode == nil else { return }
-
-        nextLabelNode?.isHidden = true
-        nextPreviewNode?.isHidden = true
-
-        let container = SKNode()
-        container.position = CGPoint(
-            x: size.width / 2,
-            y: size.height * StageResultDisplayParameters.centerYRatio
-        )
-        container.zPosition = 20
-        container.alpha = 0
-        container.setScale(StageResultDisplayParameters.initialScale)
-        addChild(container)
-        stageResultNode = container
-
-        let titleLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        titleLabel.text = title
-        titleLabel.fontSize = titleFontSize
-        titleLabel.fontColor = titleColor
-        titleLabel.horizontalAlignmentMode = .center
-        titleLabel.verticalAlignmentMode = .center
-        container.addChild(titleLabel)
-
-        if let evaluation {
-            addEvaluationDisplay(evaluation, to: container)
-        }
-
-        let nextStageYOffset: CGFloat?
-        if let evaluation, stageManager.nextConfig != nil {
-            let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
-            label.name = NodeName.resultNextStage
-            label.text = "NEXT STAGE"
-            label.fontSize = StageDisplayParameters.nextStageFontSize
-            label.fontColor = Appearance.perfectFeedbackColor
-            label.horizontalAlignmentMode = .center
-            label.verticalAlignmentMode = .center
-            label.position.y = evaluation.isPerfectClear
-                ? StageDisplayParameters.perfectClearNextStageYOffset
-                : StageDisplayParameters.nextStageYOffset
-            container.addChild(label)
-            nextStageYOffset = label.position.y
-        } else {
-            nextStageYOffset = nil
-        }
-
-        let retryLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
-        retryLabel.text = "TAP TO RETRY"
-        retryLabel.fontSize = StageResultDisplayParameters.retryLabelFontSize
-        retryLabel.fontColor = Appearance.skewerColor
-        retryLabel.horizontalAlignmentMode = .center
-        retryLabel.verticalAlignmentMode = .center
-        if let nextStageYOffset {
-            retryLabel.position.y = nextStageYOffset
-                - StageDisplayParameters.nextStageRetrySpacing
-        } else if let evaluation {
-            retryLabel.position.y = evaluation.isPerfectClear
-                ? StageResultDisplayParameters.perfectClearRetryLabelYOffset
-                : StageResultDisplayParameters.evaluatedRetryLabelYOffset
-        } else {
-            retryLabel.position.y = StageResultDisplayParameters.retryLabelYOffset
-        }
-        container.addChild(retryLabel)
-
-        let revealAction = SKAction.group([
-            SKAction.fadeIn(withDuration: StageResultDisplayParameters.revealDuration),
-            SKAction.scale(
-                to: 1,
-                duration: StageResultDisplayParameters.revealDuration
-            ),
-        ])
-        revealAction.timingMode = .easeOut
-        container.run(SKAction.sequence([
-            SKAction.wait(forDuration: revealDelay),
-            revealAction,
-        ]))
-    }
-
-    private func addEvaluationDisplay(
-        _ result: StageResult,
-        to container: SKNode
-    ) {
-        let starsLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        starsLabel.text = result.starsText
-        starsLabel.fontSize = StageResultDisplayParameters.starsFontSize
-        starsLabel.fontColor = Appearance.skewerColor
-        starsLabel.horizontalAlignmentMode = .center
-        starsLabel.verticalAlignmentMode = .center
-        starsLabel.position.y = StageResultDisplayParameters.starsYOffset
-        container.addChild(starsLabel)
-
-        if result.isPerfectClear {
-            addPerfectClearDisplay(to: container)
-        }
-
-        let detailLines = [
-            "PERFECT \(result.perfectCount)",
-            "GOOD \(result.goodCount)",
-        ]
-        let detailFirstYOffset = result.isPerfectClear
-            ? StageResultDisplayParameters.perfectClearDetailFirstYOffset
-            : StageResultDisplayParameters.detailFirstYOffset
-
-        for (index, text) in detailLines.enumerated() {
-            let detailLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
-            detailLabel.text = text
-            detailLabel.fontSize = StageResultDisplayParameters.detailLabelFontSize
-            detailLabel.fontColor = Appearance.skewerColor
-            detailLabel.horizontalAlignmentMode = .center
-            detailLabel.verticalAlignmentMode = .center
-            detailLabel.position.y = detailFirstYOffset
-                - CGFloat(index) * StageResultDisplayParameters.detailLineSpacing
-            container.addChild(detailLabel)
-        }
-    }
-
-    private func addPerfectClearDisplay(to container: SKNode) {
-        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        label.text = "PERFECT CLEAR!"
-        label.fontSize = StageResultDisplayParameters.perfectClearFontSize
-        label.fontColor = Appearance.skewerColor
-        label.horizontalAlignmentMode = .center
-        label.verticalAlignmentMode = .center
-        label.position.y = StageResultDisplayParameters.perfectClearYOffset
-        label.setScale(StageResultDisplayParameters.perfectClearInitialScale)
-        container.addChild(label)
-
-        let growAction = SKAction.scale(
-            to: StageResultDisplayParameters.perfectClearAnimationScale,
-            duration: StageResultDisplayParameters.perfectClearAnimationDuration
-        )
-        growAction.timingMode = .easeOut
-
-        let restoreAction = SKAction.scale(
-            to: 1,
-            duration: StageResultDisplayParameters.perfectClearAnimationDuration
-        )
-        restoreAction.timingMode = .easeInEaseOut
-
-        label.run(SKAction.sequence([
-            SKAction.wait(
-                forDuration: StageResultDisplayParameters.perfectClearAnimationDelay
-            ),
-            growAction,
-            restoreAction,
-        ]))
+        onStageFailed?()
     }
 
     private func recordSuccessfulLanding(_ result: HitResult) {

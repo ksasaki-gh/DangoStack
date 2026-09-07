@@ -37,6 +37,11 @@ struct TitleView: View {
                         appState.showStageSelect()
                     }
                     .buttonStyle(DangoSecondaryButtonStyle())
+
+                    Button("SETTINGS") {
+                        appState.showSettingsFromTitle()
+                    }
+                    .buttonStyle(DangoSecondaryButtonStyle())
                 }
                 .frame(maxWidth: 320)
 

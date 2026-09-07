@@ -123,15 +123,8 @@ final class DangoGameScene: SKScene {
         static let perfectRingLineWidth: CGFloat = 2
     }
 
-    private enum HapticParameters {
-        static let perfectIntensity: CGFloat = 0.85
-        static let goodIntensity: CGFloat = 0.55
-        static let wrongIntensity: CGFloat = 0.40
-        static let missIntensity: CGFloat = 0.30
-    }
-
     private enum NextDisplayParameters {
-        static let centerXRatio: CGFloat = 0.87
+        static let centerXRatio: CGFloat = 0.78
         static let labelYRatio: CGFloat = 0.92
         static let previewDiameter: CGFloat = 28
         static let previewYOffset: CGFloat = 34
@@ -151,6 +144,10 @@ final class DangoGameScene: SKScene {
         static let clearBounceDistance: CGFloat = 5
         static let clearBounceUpDuration: TimeInterval = 0.12
         static let clearBounceReturnDuration: TimeInterval = 0.16
+    }
+
+    private enum SoundTimingParameters {
+        static let dangoCompleteDelay: TimeInterval = 0.08
     }
 
     private enum FailureParameters {
@@ -214,6 +211,8 @@ final class DangoGameScene: SKScene {
     private var nextPreviewNode: SKShapeNode?
     private var lifeIndicatorNodes: [SKShapeNode] = []
     private var stageManager: StageManager
+    private let soundManager: SoundManager
+    private let hapticManager: HapticManager
     private var dangoGenerator = DangoGenerator()
     private var currentDangoColor: DangoColor?
     private var nextDangoColor: DangoColor?
@@ -232,21 +231,35 @@ final class DangoGameScene: SKScene {
     private(set) var stageResult: StageResult?
     var onStageCleared: ((StageResult) -> Void)?
     var onStageFailed: (() -> Void)?
+    var onGameEnded: (() -> Void)?
 
     override init(size: CGSize) {
+        let settingsStore = SettingsStore()
         stageManager = StageManager()
+        soundManager = SoundManager(settingsStore: settingsStore)
+        hapticManager = HapticManager(settingsStore: settingsStore)
         super.init(size: size)
         configureScene()
     }
 
-    init(size: CGSize, stageManager: StageManager) {
+    init(
+        size: CGSize,
+        stageManager: StageManager,
+        soundManager: SoundManager,
+        hapticManager: HapticManager
+    ) {
         self.stageManager = stageManager
+        self.soundManager = soundManager
+        self.hapticManager = hapticManager
         super.init(size: size)
         configureScene()
     }
 
     required init?(coder aDecoder: NSCoder) {
+        let settingsStore = SettingsStore()
         stageManager = StageManager()
+        soundManager = SoundManager(settingsStore: settingsStore)
+        hapticManager = HapticManager(settingsStore: settingsStore)
         super.init(coder: aDecoder)
         configureScene()
     }
@@ -260,12 +273,23 @@ final class DangoGameScene: SKScene {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard !isPaused else { return }
         guard case .playing = gameState else { return }
 
         guard let dango else { return }
 
         if case .movingHorizontally = dangoState {
             beginFalling(dango)
+        }
+    }
+
+    func setGamePaused(_ shouldPause: Bool) {
+        if shouldPause {
+            guard case .playing = gameState else { return }
+            isPaused = true
+        } else {
+            previousUpdateTime = nil
+            isPaused = false
         }
     }
 
@@ -487,6 +511,9 @@ final class DangoGameScene: SKScene {
         let lifeIndex = FailureParameters.maximumCount - failureCount
         guard lifeIndicatorNodes.indices.contains(lifeIndex) else { return }
 
+        soundManager.play(.lifeBreak)
+        hapticManager.play(.lifeBreak)
+
         let indicator = lifeIndicatorNodes[lifeIndex]
         let crackNode = makeLifeCrackNode()
         crackNode.alpha = 0
@@ -628,6 +655,7 @@ final class DangoGameScene: SKScene {
         dangoState = .falling
         currentFallSpeed = DangoParameters.initialFallSpeed
         dango.position.x = lockedXPosition
+        soundManager.play(.drop)
 
         let squashAction = SKAction.group([
             SKAction.scaleX(
@@ -781,7 +809,8 @@ final class DangoGameScene: SKScene {
                     y: dangoJudgementY + JudgeFeedbackParameters.missLabelYOffset
                 )
             )
-            triggerHaptic(for: .miss)
+            soundManager.play(.miss)
+            hapticManager.play(.failure)
             return
         }
 
@@ -826,7 +855,8 @@ final class DangoGameScene: SKScene {
             .wrong,
             at: judgeFeedbackPosition(targetSkewerX: targetSkewerX)
         )
-        triggerHaptic(for: .wrong)
+        soundManager.play(.wrong)
+        hapticManager.play(.failure)
 
         let kickDirection: CGFloat = dango.position.x < targetSkewerX ? -1 : 1
         let kickAction = SKAction.moveBy(
@@ -865,6 +895,7 @@ final class DangoGameScene: SKScene {
         let stackLevel = skewerStates[targetSkewerIndex].dangoCount
         let underlyingDango = skewerStates[targetSkewerIndex].dangoNodes.last
         guard skewerStates[targetSkewerIndex].addDangoNode(dango) else { return }
+        let didCompleteSkewer = skewerStates[targetSkewerIndex].isFull
         recordSuccessfulLanding(result)
 
         let dangoScenePosition = dango.position
@@ -948,7 +979,25 @@ final class DangoGameScene: SKScene {
                 feedbackKind,
                 at: self.judgeFeedbackPosition(targetSkewerX: currentTargetX)
             )
-            self.triggerHaptic(for: feedbackKind)
+
+            if isPerfect {
+                self.soundManager.play(.perfect)
+                self.hapticManager.play(.perfect)
+            } else {
+                self.soundManager.play(.good)
+                self.hapticManager.play(.good)
+            }
+
+            if didCompleteSkewer {
+                self.run(SKAction.sequence([
+                    SKAction.wait(
+                        forDuration: SoundTimingParameters.dangoCompleteDelay
+                    ),
+                    SKAction.run { [weak self] in
+                        self?.soundManager.play(.dangoComplete)
+                    },
+                ]))
+            }
 
             if let underlyingDango {
                 self.animateUnderlyingDango(underlyingDango)
@@ -1004,6 +1053,7 @@ final class DangoGameScene: SKScene {
 
     private func showStageClear() {
         gameState = .stageCleared
+        onGameEnded?()
         let result = StageResult(
             isStageClear: true,
             perfectCount: perfectCount,
@@ -1014,6 +1064,14 @@ final class DangoGameScene: SKScene {
         stageResult = result
         nextLabelNode?.isHidden = true
         nextPreviewNode?.isHidden = true
+
+        if result.isPerfectClear {
+            soundManager.play(.perfectClear)
+            hapticManager.play(.perfectClear)
+        } else {
+            soundManager.play(.stageClear)
+            hapticManager.play(.stageClear)
+        }
 
         let bounceUp = SKAction.moveBy(
             x: 0,
@@ -1185,30 +1243,6 @@ final class DangoGameScene: SKScene {
         ]))
     }
 
-    private func triggerHaptic(for kind: JudgeFeedbackKind) {
-        let style: UIImpactFeedbackGenerator.FeedbackStyle
-        let intensity: CGFloat
-
-        switch kind {
-        case .perfect:
-            style = .medium
-            intensity = HapticParameters.perfectIntensity
-        case .good:
-            style = .light
-            intensity = HapticParameters.goodIntensity
-        case .wrong:
-            style = .rigid
-            intensity = HapticParameters.wrongIntensity
-        case .miss:
-            style = .soft
-            intensity = HapticParameters.missIntensity
-        }
-
-        let generator = UIImpactFeedbackGenerator(style: style)
-        generator.prepare()
-        generator.impactOccurred(intensity: intensity)
-    }
-
     private func animateUnderlyingDango(_ underlyingDango: SKShapeNode) {
         let squashAction = SKAction.group([
             SKAction.scaleY(
@@ -1320,6 +1354,7 @@ final class DangoGameScene: SKScene {
 
         if totalFailureCount >= FailureParameters.maximumCount {
             gameState = .stageFailedPending
+            onGameEnded?()
             run(
                 SKAction.sequence([
                     SKAction.wait(

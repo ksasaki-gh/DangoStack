@@ -1,3 +1,71 @@
+Task 17を実装しました。既存のステージ進捗保存とゲームロジックは維持しています。
+実装内容
+1. SettingsStore
+[SettingsStore.swift (line 9)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SettingsStore.swift:9)でSound/Haptics設定を進捗とは分離して管理しています。
+UserDefaultsキー：
+- dangoStack.settings.soundEnabled
+- dangoStack.settings.hapticsEnabled
+初期値は両方ONで、Toggle変更時に即時保存されます。
+2. Pause管理
+[AppState.swift (line 17)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/AppState.swift:17)のgameOverlayをPause状態の唯一の基準にしています。
+[ContentView.swift (line 20)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/ContentView.swift:20)ではGameViewを維持したまま、PauseまたはSettingsを上に重ねます。そのためSettingsを開いてもステージは再生成されません。
+Pause画面は[PauseOverlayView.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/PauseOverlayView.swift:8)です。
+3. 安全なResume
+[GameView.swift (line 39)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/GameView.swift:39)からSceneへPause状態を反映しています。
+[DangoGameScene.swift (line 286)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/DangoGameScene.swift:286)でScene全体のisPausedを切り替え、Resume時にpreviousUpdateTimeを破棄します。これにより休止時間分の大きなdeltaTimeが適用されず、落下中団子や移動中の串がワープしません。
+4. HapticManager
+[HapticManager.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/HapticManager.swift:8)へ集約しました。
+イベント：
+- perfect
+- good
+- failure
+- lifeBreak
+- stageClear
+- perfectClear
+Generatorを使い回し、Haptics OFF時はManager内部で停止します。
+5. SoundManager
+[SoundManager.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SoundManager.swift:8)に以下を定義しました。
+- tap
+- drop
+- perfect
+- good
+- wrong
+- miss
+- lifeBreak
+- dangoComplete
+- stageClear
+- perfectClear
+現在は音源未配置のため無音ですが、ファイルが存在しなくても安全に無視され、クラッシュしません。
+6. 設定の即時反映
+[AppState.swift (line 41)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/AppState.swift:41)で1つのSettingsStoreを作り、SoundManagerとHapticManagerへ共有しています。各Managerが再生時に最新設定を確認するため、ゲーム中にOFFへ変更するとResume直後から反映されます。
+正式な設定画面は[SettingsView.swift (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SettingsView.swift:8)、Titleからの入口は[TitleView.swift (line 41)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/TitleView.swift:41)です。
+7. SEファイルの追加方法
+以下の名前でwav、caf、m4a、またはmp3をXcodeプロジェクトへ追加し、DangoStackターゲットへ含めれば自動認識されます。
+例：
+- drop.wav
+- perfect.wav
+- life_break.wav
+- dango_complete.wav
+- stage_clear.wav
+- perfect_clear.wav
+ファイル名は[SoundEvent (line 8)](/Users/evergreen/Program/xcode/DangoStack/DangoStack/SoundManager.swift:8)のraw valueと一致させます。
+変更ファイル
+- AppState.swift：Pause、Settings遷移、Manager保持
+- ContentView.swift：Pause/Settings overlay
+- GameView.swift：Pauseボタン、Scene保持・Pause連携
+- DangoGameScene.swift：安全な停止・再開、Sound/Haptic呼び出し
+- TitleView.swift：SETTINGSボタン
+- SettingsStore.swift：設定永続化
+- SettingsView.swift：設定画面
+- PauseOverlayView.swift：Pauseメニュー
+- HapticManager.swift：ハプティック一元管理
+- SoundManager.swift：SE一元管理
+確認結果：
+- iOS Simulator向けDebugビルド成功
+- iPhone Simulatorで起動確認済み
+- SettingsStoreの初期値と再読込による永続化テスト成功
+- git diff --check問題なし
+
 Task 16を実装しました。UserDefaultsによる進捗保存、再起動後の読み込み、破損時フォールバックを確認済みです。
 実装内容
 1. SaveManager

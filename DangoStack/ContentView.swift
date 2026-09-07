@@ -19,25 +19,55 @@ struct ContentView: View {
                 StageSelectView(appState: appState)
             case .game:
                 let stageNumber = appState.selectedStageNumber
-                GameView(
-                    stageNumber: stageNumber,
-                    onStageCleared: { result in
-                        appState.receiveStageClear(
-                            result,
-                            stageNumber: stageNumber
+                ZStack {
+                    GameView(
+                        stageNumber: stageNumber,
+                        soundManager: appState.soundManager,
+                        hapticManager: appState.hapticManager,
+                        isPaused: appState.isGamePaused,
+                        onPauseRequested: appState.pauseGame,
+                        onStageCleared: { result in
+                            appState.receiveStageClear(
+                                result,
+                                stageNumber: stageNumber
+                            )
+                        },
+                        onStageFailed: {
+                            appState.receiveStageFailure(stageNumber: stageNumber)
+                        }
+                    )
+                    .id(appState.gameSessionID)
+
+                    switch appState.gameOverlay {
+                    case .none:
+                        EmptyView()
+                    case .pause:
+                        PauseOverlayView(
+                            onResume: appState.resumeGame,
+                            onRestart: appState.restartPausedStage,
+                            onSettings: appState.showSettingsFromPause,
+                            onStageSelect: appState.showStageSelect
                         )
-                    },
-                    onStageFailed: {
-                        appState.receiveStageFailure(stageNumber: stageNumber)
+                        .transition(.opacity)
+                    case .settings:
+                        SettingsView(
+                            settingsStore: appState.settingsStore,
+                            onBack: appState.closePauseSettings
+                        )
+                        .transition(.opacity)
                     }
-                )
-                .id(stageNumber)
+                }
             case .result:
                 if let outcome = appState.latestOutcome {
                     ResultView(appState: appState, outcome: outcome)
                 } else {
                     TitleView(appState: appState)
                 }
+            case .settings:
+                SettingsView(
+                    settingsStore: appState.settingsStore,
+                    onBack: appState.closeTitleSettings
+                )
             }
         }
         .animation(.easeInOut(duration: 0.18), value: appState.screen)

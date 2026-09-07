@@ -6,13 +6,30 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		50DC67C13046E8AD00729824 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 50DC67C03046E8AD00729824 /* GoogleMobileAds */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		50DC67B03046E8AC00729824 /* DangoStack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DangoStack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		50DC67C33046E8AD00729824 /* Exceptions for "DangoStack" folder in "DangoStack" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 50DC67AF3046E8AC00729824 /* DangoStack */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		50DC67B23046E8AC00729824 /* DangoStack */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				50DC67C33046E8AD00729824 /* Exceptions for "DangoStack" folder in "DangoStack" target */,
+			);
 			path = DangoStack;
 			sourceTree = "<group>";
 		};
@@ -23,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				50DC67C13046E8AD00729824 /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +83,7 @@
 			);
 			name = DangoStack;
 			packageProductDependencies = (
+				50DC67C03046E8AD00729824 /* GoogleMobileAds */,
 			);
 			productName = DangoStack;
 			productReference = 50DC67B03046E8AC00729824 /* DangoStack.app */;
@@ -94,6 +113,9 @@
 			);
 			mainGroup = 50DC67A73046E8AC00729824;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				50DC67C23046E8AD00729824 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 50DC67B13046E8AC00729824 /* Products */;
 			projectDirPath = "";
@@ -249,6 +271,7 @@
 		50DC67BE3046E8AD00729824 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -256,6 +279,7 @@
 				DEVELOPMENT_TEAM = CUPQNUQ6SF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DangoStack/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -281,6 +305,7 @@
 		50DC67BF3046E8AD00729824 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADMOB_APP_ID = ADMOB_APP_ID_PLACEHOLDER;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -288,6 +313,7 @@
 				DEVELOPMENT_TEAM = CUPQNUQ6SF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DangoStack/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -332,6 +358,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		50DC67C23046E8AD00729824 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		50DC67C03046E8AD00729824 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 50DC67C23046E8AD00729824 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 50DC67A83046E8AC00729824 /* Project object */;
 }

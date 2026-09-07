@@ -7,7 +7,6 @@ import AVFoundation
 
 enum SoundEvent: String, CaseIterable {
     case tap
-    case drop
     case perfect
     case good
     case wrong

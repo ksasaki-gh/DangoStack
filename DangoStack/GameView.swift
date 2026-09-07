@@ -16,19 +16,23 @@ private final class GameSceneController: ObservableObject {
         stageNumber: Int,
         soundManager: SoundManager,
         hapticManager: HapticManager,
+        showsTutorial: Bool,
         onStageCleared: @escaping (StageResult) -> Void,
-        onStageFailed: @escaping () -> Void
+        onStageFailed: @escaping () -> Void,
+        onTutorialStageCleared: @escaping () -> Void
     ) {
         let stageManager = StageManager(initialStageNumber: stageNumber)
         let scene = DangoGameScene(
             size: CGSize(width: 390, height: 844),
             stageManager: stageManager,
             soundManager: soundManager,
-            hapticManager: hapticManager
+            hapticManager: hapticManager,
+            showsTutorial: showsTutorial
         )
         scene.scaleMode = .resizeFill
         scene.onStageCleared = onStageCleared
         scene.onStageFailed = onStageFailed
+        scene.onTutorialStageCleared = onTutorialStageCleared
         self.scene = scene
         scene.onGameEnded = { [weak self] in
             self?.canPause = false
@@ -39,33 +43,45 @@ private final class GameSceneController: ObservableObject {
     func setPaused(_ isPaused: Bool) {
         scene.setGamePaused(isPaused)
     }
+
+    func continueAfterRewardedAd() {
+        scene.continueAfterRewardedAd()
+        canPause = true
+    }
 }
 
 struct GameView: View {
     @StateObject private var controller: GameSceneController
 
     let isPaused: Bool
+    let rewardedContinueRequestID: UUID
     let onPauseRequested: () -> Void
 
     init(
         stageNumber: Int,
         soundManager: SoundManager,
         hapticManager: HapticManager,
+        showsTutorial: Bool,
         isPaused: Bool,
+        rewardedContinueRequestID: UUID,
         onPauseRequested: @escaping () -> Void,
         onStageCleared: @escaping (StageResult) -> Void,
-        onStageFailed: @escaping () -> Void
+        onStageFailed: @escaping () -> Void,
+        onTutorialStageCleared: @escaping () -> Void
     ) {
         _controller = StateObject(
             wrappedValue: GameSceneController(
                 stageNumber: stageNumber,
                 soundManager: soundManager,
                 hapticManager: hapticManager,
+                showsTutorial: showsTutorial,
                 onStageCleared: onStageCleared,
-                onStageFailed: onStageFailed
+                onStageFailed: onStageFailed,
+                onTutorialStageCleared: onTutorialStageCleared
             )
         )
         self.isPaused = isPaused
+        self.rewardedContinueRequestID = rewardedContinueRequestID
         self.onPauseRequested = onPauseRequested
     }
 
@@ -98,6 +114,9 @@ struct GameView: View {
         .onChange(of: isPaused) { _, newValue in
             controller.setPaused(newValue)
         }
+        .onChange(of: rewardedContinueRequestID) { _, _ in
+            controller.continueAfterRewardedAd()
+        }
     }
 }
 
@@ -107,9 +126,12 @@ struct GameView: View {
         stageNumber: 1,
         soundManager: SoundManager(settingsStore: settingsStore),
         hapticManager: HapticManager(settingsStore: settingsStore),
+        showsTutorial: false,
         isPaused: false,
+        rewardedContinueRequestID: UUID(),
         onPauseRequested: {},
         onStageCleared: { _ in },
-        onStageFailed: {}
+        onStageFailed: {},
+        onTutorialStageCleared: {}
     )
 }

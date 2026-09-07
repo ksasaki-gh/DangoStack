@@ -7,7 +7,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settingsStore: SettingsStore
+    @ObservedObject var consentManager: ConsentManager
     let onBack: () -> Void
+    let onReplayTutorial: () -> Void
+    let onPrivacyOptions: () -> Void
 
     var body: some View {
         ZStack {
@@ -29,6 +32,28 @@ struct SettingsView: View {
                         title: "Haptics",
                         isOn: $settingsStore.isHapticsEnabled
                     )
+
+                    Divider()
+                        .overlay(DangoTheme.text.opacity(0.12))
+
+                    Button("REPLAY TUTORIAL", action: onReplayTutorial)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(DangoTheme.green)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 18)
+                        .accessibilityHint("Starts the Stage 1 tutorial")
+
+                    if consentManager.isPrivacyOptionsRequired {
+                        Divider()
+                            .overlay(DangoTheme.text.opacity(0.12))
+
+                        Button("PRIVACY OPTIONS", action: onPrivacyOptions)
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(DangoTheme.green)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 18)
+                            .accessibilityHint("Review advertising privacy choices")
+                    }
                 }
                 .padding(.horizontal, 20)
                 .background(
@@ -84,5 +109,11 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(settingsStore: SettingsStore(), onBack: {})
+    SettingsView(
+        settingsStore: SettingsStore(),
+        consentManager: ConsentManager(),
+        onBack: {},
+        onReplayTutorial: {},
+        onPrivacyOptions: {}
+    )
 }

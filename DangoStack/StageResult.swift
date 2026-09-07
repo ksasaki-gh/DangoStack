@@ -27,9 +27,11 @@ struct StageResult: Equatable {
         self.wrongCount = wrongCount
 
         let totalFailureCount = missCount + wrongCount
+        // A rewarded continuation can make a clear possible after the third
+        // recorded failure. Any successful clear still receives at least one star.
         let clampedFailureCount = min(
             max(totalFailureCount, 0),
-            Self.maximumStars
+            Self.maximumStars - 1
         )
         stars = isStageClear
             ? Self.maximumStars - clampedFailureCount

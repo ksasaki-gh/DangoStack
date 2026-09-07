@@ -98,6 +98,8 @@ final class DangoGameScene: SKScene {
         static let upwardKickDistance: CGFloat = 18
         static let kickDuration: TimeInterval = 0.10
         static let fallDuration: TimeInterval = 0.42
+        static let skewerShakeAmount: CGFloat = 2.5
+        static let skewerShakeStepDuration: TimeInterval = 0.035
     }
 
     private enum JudgeFeedbackParameters {
@@ -121,6 +123,10 @@ final class DangoGameScene: SKScene {
         static let perfectRingFinalScale: CGFloat = 1.35
         static let perfectRingDuration: TimeInterval = 0.20
         static let perfectRingLineWidth: CGFloat = 2
+        static let perfectParticleCount = 3
+        static let perfectParticleRadius: CGFloat = 2.5
+        static let perfectParticleDistance: CGFloat = 20
+        static let perfectParticleDuration: TimeInterval = 0.18
     }
 
     private enum NextDisplayParameters {
@@ -140,14 +146,44 @@ final class DangoGameScene: SKScene {
     }
 
     private enum OutcomeTransitionParameters {
-        static let clearDelay: TimeInterval = 0.75
+        static let clearDelay: TimeInterval = 0.85
+        static let stageClearFeedbackDelay: TimeInterval = 0.26
         static let clearBounceDistance: CGFloat = 5
         static let clearBounceUpDuration: TimeInterval = 0.12
         static let clearBounceReturnDuration: TimeInterval = 0.16
+        static let sequentialBounceDelay: TimeInterval = 0.055
+        static let perfectClearBounceMultiplier: CGFloat = 1.5
+        static let perfectClearParticleCount = 6
+        static let perfectClearParticleRadius: CGFloat = 3
+        static let perfectClearParticleDistance: CGFloat = 32
+        static let perfectClearEffectDuration: TimeInterval = 0.34
     }
 
-    private enum SoundTimingParameters {
-        static let dangoCompleteDelay: TimeInterval = 0.08
+    private enum DangoCompleteFeedbackParameters {
+        static let squashScaleX: CGFloat = 0.97
+        static let squashScaleY: CGFloat = 0.96
+        static let squashDuration: TimeInterval = 0.055
+        static let bounceHeight: CGFloat = 6
+        static let bounceDuration: TimeInterval = 0.09
+        static let returnDuration: TimeInterval = 0.11
+    }
+
+    private enum TutorialParameters {
+        static let initialHintDelay: TimeInterval = 0.78
+        static let fadeDuration: TimeInterval = 0.18
+        static let nextHintDuration: TimeInterval = 1.35
+        static let colorHintDuration: TimeInterval = 1.65
+        static let transitionDelay: TimeInterval = 0.12
+        static let hintFontSize: CGFloat = 19
+        static let initialHintYRatio: CGFloat = 0.59
+        static let nextHintXRatio: CGFloat = 0.58
+        static let nextHintYRatio: CGFloat = 0.88
+        static let colorHintYRatio: CGFloat = 0.62
+        static let nextPulseScale: CGFloat = 1.18
+        static let nextPulseDuration: TimeInterval = 0.18
+        static let guideAlpha: CGFloat = 0.22
+        static let guideScale: CGFloat = 0.92
+        static let guideStrokeWidth: CGFloat = 1.2
     }
 
     private enum FailureParameters {
@@ -203,6 +239,15 @@ final class DangoGameScene: SKScene {
         case miss
     }
 
+    private enum TutorialPhase {
+        case inactive
+        case waitingForFirstTap
+        case waitingForFirstResult
+        case showingNextHint
+        case showingColorHint
+        case hintsComplete
+    }
+
     private var skewerGroupNode: SKNode?
     private var skewers: [SKShapeNode] = []
     private var skewerStates: [SkewerState] = []
@@ -213,6 +258,7 @@ final class DangoGameScene: SKScene {
     private var stageManager: StageManager
     private let soundManager: SoundManager
     private let hapticManager: HapticManager
+    private let showsTutorial: Bool
     private var dangoGenerator = DangoGenerator()
     private var currentDangoColor: DangoColor?
     private var nextDangoColor: DangoColor?
@@ -226,18 +272,24 @@ final class DangoGameScene: SKScene {
     private var hasJudgedCurrentDango = false
     private var missCount = 0
     private var wrongCount = 0
+    private var activeFailureCount = 0
     private var perfectCount = 0
     private var goodCount = 0
+    private var tutorialPhase = TutorialPhase.inactive
+    private var tutorialHintNode: SKLabelNode?
+    private var tutorialGuideNodes: [SKShapeNode] = []
     private(set) var stageResult: StageResult?
     var onStageCleared: ((StageResult) -> Void)?
     var onStageFailed: (() -> Void)?
     var onGameEnded: (() -> Void)?
+    var onTutorialStageCleared: (() -> Void)?
 
     override init(size: CGSize) {
         let settingsStore = SettingsStore()
         stageManager = StageManager()
         soundManager = SoundManager(settingsStore: settingsStore)
         hapticManager = HapticManager(settingsStore: settingsStore)
+        showsTutorial = false
         super.init(size: size)
         configureScene()
     }
@@ -246,11 +298,13 @@ final class DangoGameScene: SKScene {
         size: CGSize,
         stageManager: StageManager,
         soundManager: SoundManager,
-        hapticManager: HapticManager
+        hapticManager: HapticManager,
+        showsTutorial: Bool
     ) {
         self.stageManager = stageManager
         self.soundManager = soundManager
         self.hapticManager = hapticManager
+        self.showsTutorial = showsTutorial
         super.init(size: size)
         configureScene()
     }
@@ -260,6 +314,7 @@ final class DangoGameScene: SKScene {
         stageManager = StageManager()
         soundManager = SoundManager(settingsStore: settingsStore)
         hapticManager = HapticManager(settingsStore: settingsStore)
+        showsTutorial = false
         super.init(coder: aDecoder)
         configureScene()
     }
@@ -270,6 +325,7 @@ final class DangoGameScene: SKScene {
         layoutNextDisplay()
         layoutLifeHUD()
         layoutDangoForCurrentSceneSize()
+        updateTutorialGuides()
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -279,6 +335,7 @@ final class DangoGameScene: SKScene {
         guard let dango else { return }
 
         if case .movingHorizontally = dangoState {
+            tutorialDidTapForFirstTime()
             beginFalling(dango)
         }
     }
@@ -291,6 +348,18 @@ final class DangoGameScene: SKScene {
             previousUpdateTime = nil
             isPaused = false
         }
+    }
+
+    func continueAfterRewardedAd() {
+        guard case .stageFailed = gameState,
+              activeFailureCount >= FailureParameters.maximumCount else { return }
+
+        activeFailureCount = FailureParameters.maximumCount - 1
+        restoreLifeIndicator(at: 0)
+        gameState = .playing
+        dangoState = .movingHorizontally
+        previousUpdateTime = nil
+        respawnTimeRemaining = DangoParameters.respawnDelay
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -333,6 +402,8 @@ final class DangoGameScene: SKScene {
         nextLabelNode = nil
         nextPreviewNode = nil
         lifeIndicatorNodes.removeAll()
+        tutorialHintNode = nil
+        tutorialGuideNodes.removeAll()
 
         dangoGenerator = DangoGenerator()
         currentDangoColor = nil
@@ -347,8 +418,10 @@ final class DangoGameScene: SKScene {
         hasJudgedCurrentDango = false
         missCount = 0
         wrongCount = 0
+        activeFailureCount = 0
         perfectCount = 0
         goodCount = 0
+        tutorialPhase = showsTutorial ? .waitingForFirstTap : .inactive
         stageResult = nil
 
         prepareInitialDangoColors()
@@ -358,8 +431,10 @@ final class DangoGameScene: SKScene {
         layoutSkewers()
         layoutNextDisplay()
         layoutLifeHUD()
+        updateTutorialGuides()
         spawnDango()
         showStageStartLabel()
+        startTutorialIfNeeded()
     }
 
     private func removeAllActionsRecursively(from node: SKNode) {
@@ -465,6 +540,194 @@ final class DangoGameScene: SKScene {
         ]))
     }
 
+    private func startTutorialIfNeeded() {
+        guard case .waitingForFirstTap = tutorialPhase else { return }
+
+        run(SKAction.sequence([
+            SKAction.wait(forDuration: TutorialParameters.initialHintDelay),
+            SKAction.run { [weak self] in
+                guard let self,
+                      case .waitingForFirstTap = self.tutorialPhase else {
+                    return
+                }
+                self.showPersistentTutorialHint(
+                    "TAP TO DROP",
+                    at: CGPoint(
+                        x: self.size.width / 2,
+                        y: self.size.height * TutorialParameters.initialHintYRatio
+                    )
+                )
+            },
+        ]), withKey: "showInitialTutorialHint")
+    }
+
+    private func tutorialDidTapForFirstTime() {
+        guard case .waitingForFirstTap = tutorialPhase else { return }
+        tutorialPhase = .waitingForFirstResult
+        removeAction(forKey: "showInitialTutorialHint")
+        dismissTutorialHint()
+    }
+
+    private func tutorialDidProcessFirstDango() {
+        guard case .waitingForFirstResult = tutorialPhase else { return }
+        tutorialPhase = .showingNextHint
+
+        showTimedTutorialHint(
+            "CHECK NEXT",
+            at: CGPoint(
+                x: size.width * TutorialParameters.nextHintXRatio,
+                y: size.height * TutorialParameters.nextHintYRatio
+            ),
+            holdDuration: TutorialParameters.nextHintDuration
+        ) { [weak self] in
+            self?.showTutorialColorHint()
+        }
+
+        let pulseUp = SKAction.scale(
+            to: TutorialParameters.nextPulseScale,
+            duration: TutorialParameters.nextPulseDuration
+        )
+        pulseUp.timingMode = .easeOut
+        let pulseDown = SKAction.scale(
+            to: 1,
+            duration: TutorialParameters.nextPulseDuration
+        )
+        pulseDown.timingMode = .easeInEaseOut
+        nextPreviewNode?.run(
+            SKAction.repeat(SKAction.sequence([pulseUp, pulseDown]), count: 3),
+            withKey: "tutorialNextPulse"
+        )
+    }
+
+    private func showTutorialColorHint() {
+        guard case .showingNextHint = tutorialPhase else { return }
+        tutorialPhase = .showingColorHint
+        nextPreviewNode?.removeAction(forKey: "tutorialNextPulse")
+        nextPreviewNode?.setScale(1)
+
+        run(SKAction.sequence([
+            SKAction.wait(forDuration: TutorialParameters.transitionDelay),
+            SKAction.run { [weak self] in
+                guard let self,
+                      case .showingColorHint = self.tutorialPhase else {
+                    return
+                }
+                self.showTimedTutorialHint(
+                    "MATCH THE COLOR",
+                    at: CGPoint(
+                        x: self.size.width / 2,
+                        y: self.size.height * TutorialParameters.colorHintYRatio
+                    ),
+                    holdDuration: TutorialParameters.colorHintDuration
+                ) { [weak self] in
+                    self?.finishTutorialHints()
+                }
+            },
+        ]), withKey: "showTutorialColorHint")
+    }
+
+    private func showPersistentTutorialHint(_ text: String, at position: CGPoint) {
+        dismissTutorialHint()
+        let label = makeTutorialLabel(text: text, position: position)
+        tutorialHintNode = label
+        addChild(label)
+        label.run(SKAction.group([
+            SKAction.fadeIn(withDuration: TutorialParameters.fadeDuration),
+            SKAction.scale(to: 1, duration: TutorialParameters.fadeDuration),
+        ]))
+    }
+
+    private func showTimedTutorialHint(
+        _ text: String,
+        at position: CGPoint,
+        holdDuration: TimeInterval,
+        completion: @escaping () -> Void
+    ) {
+        dismissTutorialHint()
+        let label = makeTutorialLabel(text: text, position: position)
+        tutorialHintNode = label
+        addChild(label)
+
+        label.run(SKAction.sequence([
+            SKAction.group([
+                SKAction.fadeIn(withDuration: TutorialParameters.fadeDuration),
+                SKAction.scale(to: 1, duration: TutorialParameters.fadeDuration),
+            ]),
+            SKAction.wait(forDuration: holdDuration),
+            SKAction.fadeOut(withDuration: TutorialParameters.fadeDuration),
+            SKAction.run(completion),
+            SKAction.removeFromParent(),
+        ]))
+    }
+
+    private func makeTutorialLabel(text: String, position: CGPoint) -> SKLabelNode {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = text
+        label.fontSize = TutorialParameters.hintFontSize
+        label.fontColor = Appearance.skewerColor
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+        label.position = position
+        label.zPosition = 18
+        label.alpha = 0
+        label.setScale(0.92)
+        return label
+    }
+
+    private func dismissTutorialHint() {
+        tutorialHintNode?.removeAllActions()
+        tutorialHintNode?.removeFromParent()
+        tutorialHintNode = nil
+    }
+
+    private func finishTutorialHints() {
+        switch tutorialPhase {
+        case .inactive, .hintsComplete:
+            return
+        case .waitingForFirstTap, .waitingForFirstResult,
+             .showingNextHint, .showingColorHint:
+            tutorialPhase = .hintsComplete
+        }
+
+        removeAction(forKey: "showInitialTutorialHint")
+        removeAction(forKey: "showTutorialColorHint")
+        nextPreviewNode?.removeAction(forKey: "tutorialNextPulse")
+        nextPreviewNode?.setScale(1)
+        dismissTutorialHint()
+    }
+
+    private func updateTutorialGuides() {
+        tutorialGuideNodes.forEach { $0.removeFromParent() }
+        tutorialGuideNodes.removeAll()
+
+        guard showsTutorial, let skewerGroupNode else { return }
+
+        for index in skewerStates.indices {
+            guard let requiredColor = skewerStates[index].nextRequiredColor,
+                  skewers.indices.contains(index) else {
+                continue
+            }
+
+            let radius = DangoParameters.diameter
+                * TutorialParameters.guideScale
+                / 2
+            let guide = SKShapeNode(circleOfRadius: radius)
+            guide.fillColor = spriteColor(for: requiredColor)
+                .withAlphaComponent(TutorialParameters.guideAlpha)
+            guide.strokeColor = Appearance.skewerColor.withAlphaComponent(
+                TutorialParameters.guideAlpha * 1.25
+            )
+            guide.lineWidth = TutorialParameters.guideStrokeWidth
+            guide.position = CGPoint(
+                x: skewers[index].position.x,
+                y: stackedDangoY(for: skewerStates[index].dangoCount)
+            )
+            guide.zPosition = 0.5
+            skewerGroupNode.addChild(guide)
+            tutorialGuideNodes.append(guide)
+        }
+    }
+
     private func addLifeHUD() {
         lifeIndicatorNodes = (0..<FailureParameters.maximumCount).map { _ in
             let indicator = SKShapeNode(
@@ -556,6 +819,18 @@ final class DangoGameScene: SKScene {
             disappearAction,
             SKAction.hide(),
         ]))
+    }
+
+    private func restoreLifeIndicator(at index: Int) {
+        guard lifeIndicatorNodes.indices.contains(index) else { return }
+        let indicator = lifeIndicatorNodes[index]
+        indicator.removeAllActions()
+        indicator.removeAllChildren()
+        indicator.isHidden = false
+        indicator.alpha = 1
+        indicator.setScale(1)
+        indicator.fillColor = FailureParameters.lifeColor
+        indicator.strokeColor = FailureParameters.lifeColor
     }
 
     private func makeLifeCrackNode() -> SKShapeNode {
@@ -655,7 +930,7 @@ final class DangoGameScene: SKScene {
         dangoState = .falling
         currentFallSpeed = DangoParameters.initialFallSpeed
         dango.position.x = lockedXPosition
-        soundManager.play(.drop)
+        soundManager.play(.tap)
 
         let squashAction = SKAction.group([
             SKAction.scaleX(
@@ -824,6 +1099,7 @@ final class DangoGameScene: SKScene {
             print("[Landing] WRONG: skewer is full")
             handleWrongLanding(
                 dango,
+                targetSkewerIndex: targetSkewerIndex,
                 targetSkewerX: skewerCenterXs[targetSkewerIndex]
             )
             return
@@ -836,6 +1112,7 @@ final class DangoGameScene: SKScene {
             )
             handleWrongLanding(
                 dango,
+                targetSkewerIndex: targetSkewerIndex,
                 targetSkewerX: skewerCenterXs[targetSkewerIndex]
             )
             return
@@ -849,7 +1126,11 @@ final class DangoGameScene: SKScene {
         )
     }
 
-    private func handleWrongLanding(_ dango: SKShapeNode, targetSkewerX: CGFloat) {
+    private func handleWrongLanding(
+        _ dango: SKShapeNode,
+        targetSkewerIndex: Int,
+        targetSkewerX: CGFloat
+    ) {
         dangoState = .wrong
         showJudgeFeedback(
             .wrong,
@@ -857,6 +1138,7 @@ final class DangoGameScene: SKScene {
         )
         soundManager.play(.wrong)
         hapticManager.play(.failure)
+        animateWrongSkewer(at: targetSkewerIndex)
 
         let kickDirection: CGFloat = dango.position.x < targetSkewerX ? -1 : 1
         let kickAction = SKAction.moveBy(
@@ -902,6 +1184,7 @@ final class DangoGameScene: SKScene {
         dango.removeFromParent()
         skewerGroupNode.addChild(dango)
         dango.position = skewerGroupNode.convert(dangoScenePosition, from: self)
+        updateTutorialGuides()
 
         let isPerfect: Bool
         let feedbackKind: JudgeFeedbackKind
@@ -988,23 +1271,13 @@ final class DangoGameScene: SKScene {
                 self.hapticManager.play(.good)
             }
 
-            if didCompleteSkewer {
-                self.run(SKAction.sequence([
-                    SKAction.wait(
-                        forDuration: SoundTimingParameters.dangoCompleteDelay
-                    ),
-                    SKAction.run { [weak self] in
-                        self?.soundManager.play(.dangoComplete)
-                    },
-                ]))
-            }
-
             if let underlyingDango {
                 self.animateUnderlyingDango(underlyingDango)
             }
 
             if isPerfect {
                 self.showPerfectRing(at: targetPosition, in: skewerGroupNode)
+                self.showPerfectParticles(at: targetPosition, in: skewerGroupNode)
             }
         }
 
@@ -1042,6 +1315,12 @@ final class DangoGameScene: SKScene {
         dango.run(landingAction) { [weak self, weak dango] in
             guard let self, let dango, self.dango === dango else { return }
             self.dango = nil
+            self.tutorialDidProcessFirstDango()
+
+            if didCompleteSkewer {
+                self.soundManager.play(.dangoComplete)
+                self.animateCompletedSkewer(at: targetSkewerIndex)
+            }
 
             if self.isStageClear {
                 self.showStageClear()
@@ -1054,6 +1333,10 @@ final class DangoGameScene: SKScene {
     private func showStageClear() {
         gameState = .stageCleared
         onGameEnded?()
+        finishTutorialHints()
+        if showsTutorial {
+            onTutorialStageCleared?()
+        }
         let result = StageResult(
             isStageClear: true,
             perfectCount: perfectCount,
@@ -1065,27 +1348,23 @@ final class DangoGameScene: SKScene {
         nextLabelNode?.isHidden = true
         nextPreviewNode?.isHidden = true
 
-        if result.isPerfectClear {
-            soundManager.play(.perfectClear)
-            hapticManager.play(.perfectClear)
-        } else {
-            soundManager.play(.stageClear)
-            hapticManager.play(.stageClear)
-        }
-
-        let bounceUp = SKAction.moveBy(
-            x: 0,
-            y: OutcomeTransitionParameters.clearBounceDistance,
-            duration: OutcomeTransitionParameters.clearBounceUpDuration
-        )
-        bounceUp.timingMode = .easeOut
-        let bounceBack = SKAction.moveBy(
-            x: 0,
-            y: -OutcomeTransitionParameters.clearBounceDistance,
-            duration: OutcomeTransitionParameters.clearBounceReturnDuration
-        )
-        bounceBack.timingMode = .easeInEaseOut
-        skewerGroupNode?.run(SKAction.sequence([bounceUp, bounceBack]))
+        run(SKAction.sequence([
+            SKAction.wait(
+                forDuration: OutcomeTransitionParameters.stageClearFeedbackDelay
+            ),
+            SKAction.run { [weak self] in
+                guard let self else { return }
+                if result.isPerfectClear {
+                    self.soundManager.play(.perfectClear)
+                    self.hapticManager.play(.perfectClear)
+                    self.showPerfectClearParticles()
+                } else {
+                    self.soundManager.play(.stageClear)
+                    self.hapticManager.play(.stageClear)
+                }
+                self.animateStageClear(isPerfectClear: result.isPerfectClear)
+            },
+        ]), withKey: "stageClearFeedback")
 
         run(
             SKAction.sequence([
@@ -1243,6 +1522,175 @@ final class DangoGameScene: SKScene {
         ]))
     }
 
+    private func showPerfectParticles(
+        at position: CGPoint,
+        in parentNode: SKNode
+    ) {
+        let count = JudgeFeedbackParameters.perfectParticleCount
+        guard count > 0 else { return }
+
+        for index in 0..<count {
+            let angle = CGFloat.pi * 2 * CGFloat(index) / CGFloat(count)
+                + CGFloat.pi / 6
+            let particle = SKShapeNode(
+                circleOfRadius: JudgeFeedbackParameters.perfectParticleRadius
+            )
+            particle.fillColor = Appearance.perfectFeedbackColor
+            particle.strokeColor = .clear
+            particle.position = position
+            particle.zPosition = 3
+            parentNode.addChild(particle)
+
+            let distance = JudgeFeedbackParameters.perfectParticleDistance
+            let duration = JudgeFeedbackParameters.perfectParticleDuration
+            let move = SKAction.moveBy(
+                x: cos(angle) * distance,
+                y: sin(angle) * distance,
+                duration: duration
+            )
+            move.timingMode = .easeOut
+            particle.run(SKAction.sequence([
+                SKAction.group([
+                    move,
+                    SKAction.fadeOut(withDuration: duration),
+                    SKAction.scale(to: 0.35, duration: duration),
+                ]),
+                SKAction.removeFromParent(),
+            ]))
+        }
+    }
+
+    private func animateWrongSkewer(at index: Int) {
+        guard skewers.indices.contains(index) else { return }
+        let skewer = skewers[index]
+        let amount = WrongAnimationParameters.skewerShakeAmount
+        let duration = WrongAnimationParameters.skewerShakeStepDuration
+        skewer.removeAction(forKey: "wrongShake")
+        skewer.run(SKAction.sequence([
+            SKAction.moveBy(x: -amount, y: 0, duration: duration),
+            SKAction.moveBy(x: amount * 2, y: 0, duration: duration),
+            SKAction.moveBy(x: -amount, y: 0, duration: duration),
+        ]), withKey: "wrongShake")
+    }
+
+    private func animateCompletedSkewer(at index: Int) {
+        guard skewerStates.indices.contains(index) else { return }
+
+        let squash = SKAction.group([
+            SKAction.scaleX(
+                to: DangoCompleteFeedbackParameters.squashScaleX,
+                duration: DangoCompleteFeedbackParameters.squashDuration
+            ),
+            SKAction.scaleY(
+                to: DangoCompleteFeedbackParameters.squashScaleY,
+                duration: DangoCompleteFeedbackParameters.squashDuration
+            ),
+        ])
+        squash.timingMode = .easeOut
+
+        let bounceUp = SKAction.group([
+            SKAction.moveBy(
+                x: 0,
+                y: DangoCompleteFeedbackParameters.bounceHeight,
+                duration: DangoCompleteFeedbackParameters.bounceDuration
+            ),
+            SKAction.scale(
+                to: 1,
+                duration: DangoCompleteFeedbackParameters.bounceDuration
+            ),
+        ])
+        bounceUp.timingMode = .easeOut
+
+        let bounceBack = SKAction.moveBy(
+            x: 0,
+            y: -DangoCompleteFeedbackParameters.bounceHeight,
+            duration: DangoCompleteFeedbackParameters.returnDuration
+        )
+        bounceBack.timingMode = .easeInEaseOut
+
+        for dangoNode in skewerStates[index].dangoNodes {
+            dangoNode.run(SKAction.sequence([squash, bounceUp, bounceBack]))
+        }
+    }
+
+    private func animateStageClear(isPerfectClear: Bool) {
+        let bounceDistance = OutcomeTransitionParameters.clearBounceDistance
+            * (isPerfectClear
+                ? OutcomeTransitionParameters.perfectClearBounceMultiplier
+                : 1)
+
+        for index in skewerStates.indices {
+            let delay = isPerfectClear
+                ? 0
+                : TimeInterval(index)
+                    * OutcomeTransitionParameters.sequentialBounceDelay
+            let bounceUp = SKAction.moveBy(
+                x: 0,
+                y: bounceDistance,
+                duration: OutcomeTransitionParameters.clearBounceUpDuration
+            )
+            bounceUp.timingMode = .easeOut
+            let bounceBack = SKAction.moveBy(
+                x: 0,
+                y: -bounceDistance,
+                duration: OutcomeTransitionParameters.clearBounceReturnDuration
+            )
+            bounceBack.timingMode = .easeInEaseOut
+            let action = SKAction.sequence([
+                SKAction.wait(forDuration: delay),
+                bounceUp,
+                bounceBack,
+            ])
+
+            skewers[index].run(action)
+            for dangoNode in skewerStates[index].dangoNodes {
+                dangoNode.run(action)
+            }
+        }
+    }
+
+    private func showPerfectClearParticles() {
+        let count = OutcomeTransitionParameters.perfectClearParticleCount
+        guard count > 0 else { return }
+
+        let colors: [SKColor] = [
+            spriteColor(for: .green),
+            spriteColor(for: .white),
+            spriteColor(for: .pink),
+        ]
+        let origin = CGPoint(x: size.width / 2, y: skewerTopY + 24)
+
+        for index in 0..<count {
+            let angle = CGFloat.pi * 2 * CGFloat(index) / CGFloat(count)
+            let particle = SKShapeNode(
+                circleOfRadius: OutcomeTransitionParameters.perfectClearParticleRadius
+            )
+            particle.fillColor = colors[index % colors.count]
+            particle.strokeColor = Appearance.skewerColor.withAlphaComponent(0.25)
+            particle.lineWidth = 0.5
+            particle.position = origin
+            particle.zPosition = 14
+            addChild(particle)
+
+            let distance = OutcomeTransitionParameters.perfectClearParticleDistance
+            let duration = OutcomeTransitionParameters.perfectClearEffectDuration
+            let move = SKAction.moveBy(
+                x: cos(angle) * distance,
+                y: sin(angle) * distance,
+                duration: duration
+            )
+            move.timingMode = .easeOut
+            particle.run(SKAction.sequence([
+                SKAction.group([
+                    move,
+                    SKAction.fadeOut(withDuration: duration),
+                    SKAction.scale(to: 0.25, duration: duration),
+                ]),
+                SKAction.removeFromParent(),
+            ]))
+        }
+    }
+
     private func animateUnderlyingDango(_ underlyingDango: SKShapeNode) {
         let squashAction = SKAction.group([
             SKAction.scaleY(
@@ -1345,14 +1793,16 @@ final class DangoGameScene: SKScene {
         case .wrong:
             wrongCount += 1
         }
+        activeFailureCount += 1
 
         print(
             "[Failure] \(failureKind.rawValue): "
-                + "\(totalFailureCount)/\(FailureParameters.maximumCount)"
+                + "\(activeFailureCount)/\(FailureParameters.maximumCount)"
         )
-        breakLifeIndicator(forFailureCount: totalFailureCount)
+        breakLifeIndicator(forFailureCount: activeFailureCount)
+        tutorialDidProcessFirstDango()
 
-        if totalFailureCount >= FailureParameters.maximumCount {
+        if activeFailureCount >= FailureParameters.maximumCount {
             gameState = .stageFailedPending
             onGameEnded?()
             run(
@@ -1387,10 +1837,6 @@ final class DangoGameScene: SKScene {
 
     private var currentSkewerCenterXs: [CGFloat] {
         skewers.map { $0.convert(.zero, to: self).x }
-    }
-
-    private var totalFailureCount: Int {
-        missCount + wrongCount
     }
 
     private var isStageClear: Bool {

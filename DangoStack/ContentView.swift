@@ -24,7 +24,9 @@ struct ContentView: View {
                         stageNumber: stageNumber,
                         soundManager: appState.soundManager,
                         hapticManager: appState.hapticManager,
+                        showsTutorial: appState.isTutorialSession,
                         isPaused: appState.isGamePaused,
+                        rewardedContinueRequestID: appState.rewardedContinueRequestID,
                         onPauseRequested: appState.pauseGame,
                         onStageCleared: { result in
                             appState.receiveStageClear(
@@ -34,6 +36,9 @@ struct ContentView: View {
                         },
                         onStageFailed: {
                             appState.receiveStageFailure(stageNumber: stageNumber)
+                        },
+                        onTutorialStageCleared: {
+                            appState.completeTutorialAfterStageClear()
                         }
                     )
                     .id(appState.gameSessionID)
@@ -52,7 +57,18 @@ struct ContentView: View {
                     case .settings:
                         SettingsView(
                             settingsStore: appState.settingsStore,
-                            onBack: appState.closePauseSettings
+                            consentManager: appState.consentManager,
+                            onBack: appState.closePauseSettings,
+                            onReplayTutorial: appState.replayTutorial,
+                            onPrivacyOptions: {
+                                Task { await appState.showPrivacyOptions() }
+                            }
+                        )
+                        .transition(.opacity)
+                    case .failed:
+                        StageFailedOverlayView(
+                            appState: appState,
+                            adManager: appState.adManager
                         )
                         .transition(.opacity)
                     }
@@ -66,11 +82,19 @@ struct ContentView: View {
             case .settings:
                 SettingsView(
                     settingsStore: appState.settingsStore,
-                    onBack: appState.closeTitleSettings
+                    consentManager: appState.consentManager,
+                    onBack: appState.closeTitleSettings,
+                    onReplayTutorial: appState.replayTutorial,
+                    onPrivacyOptions: {
+                        Task { await appState.showPrivacyOptions() }
+                    }
                 )
             }
         }
         .animation(.easeInOut(duration: 0.18), value: appState.screen)
+        .task {
+            await appState.configureAdvertising()
+        }
     }
 }
 

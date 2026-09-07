@@ -107,6 +107,7 @@ struct ResultView: View {
                     appState.playNextStage()
                 }
                 .buttonStyle(DangoPrimaryButtonStyle())
+                .disabled(appState.isResultTransitionInProgress)
             }
 
             if isClear {
@@ -114,17 +115,20 @@ struct ResultView: View {
                     appState.retryStage()
                 }
                 .buttonStyle(DangoSecondaryButtonStyle())
+                .disabled(appState.isResultTransitionInProgress)
             } else {
                 Button("RETRY") {
                     appState.retryStage()
                 }
                 .buttonStyle(DangoPrimaryButtonStyle())
+                .disabled(appState.isResultTransitionInProgress)
             }
 
             Button("STAGE SELECT") {
                 appState.showStageSelect()
             }
             .buttonStyle(DangoSecondaryButtonStyle())
+            .disabled(appState.isResultTransitionInProgress)
 
             if isClear
                 && appState.selectedStageNumber
@@ -133,6 +137,7 @@ struct ResultView: View {
                     appState.showTitle()
                 }
                 .buttonStyle(DangoSecondaryButtonStyle())
+                .disabled(appState.isResultTransitionInProgress)
             }
         }
         .frame(maxWidth: 320)

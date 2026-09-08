@@ -60,7 +60,9 @@ final class SoundManager {
             return player
         } catch {
             missingEvents.insert(event)
+#if DEBUG
             print("[SoundManager] Failed to load \(event.rawValue): \(error)")
+#endif
             return nil
         }
     }

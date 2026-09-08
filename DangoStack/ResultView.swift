@@ -15,23 +15,30 @@ struct ResultView: View {
         ZStack {
             DangoTheme.background.ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Spacer(minLength: 24)
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 20) {
+                        Spacer(minLength: 24)
 
-                Text("STAGE \(appState.selectedStageNumber)")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(DangoTheme.text.opacity(0.72))
+                        Text("STAGE \(appState.selectedStageNumber)")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(DangoTheme.text.opacity(0.72))
 
-                switch outcome {
-                case .cleared(let result):
-                    clearResult(result)
-                case .failed:
-                    failedResult
+                        switch outcome {
+                        case .cleared(let result):
+                            clearResult(result)
+                        case .failed:
+                            failedResult
+                        }
+
+                        Spacer(minLength: 24)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: geometry.size.height)
+                    .padding(.horizontal, 28)
                 }
-
-                Spacer(minLength: 24)
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .padding(.horizontal, 28)
         }
     }
 

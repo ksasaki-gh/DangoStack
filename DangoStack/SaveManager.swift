@@ -188,7 +188,9 @@ final class SaveManager: ObservableObject {
             let decodedProgress = try decoder.decode(GameProgress.self, from: data)
             return GameProgress.normalized(decodedProgress)
         } catch {
+#if DEBUG
             print("[SaveManager] Failed to decode progress: \(error)")
+#endif
             return nil
         }
     }
@@ -202,7 +204,9 @@ final class SaveManager: ObservableObject {
             let data = try encoder.encode(progress)
             userDefaults.set(data, forKey: userDefaultsKey)
         } catch {
+#if DEBUG
             print("[SaveManager] Failed to encode progress: \(error)")
+#endif
         }
     }
 }

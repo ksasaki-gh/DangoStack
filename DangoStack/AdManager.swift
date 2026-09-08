@@ -98,12 +98,10 @@ final class AdManager: NSObject, ObservableObject {
         rewardedCompletion = completion
         didEarnCurrentReward = false
         rewardedAd.present(from: viewController) { [weak self] in
-            Task { @MainActor in
-                self?.didEarnCurrentReward = true
+            self?.didEarnCurrentReward = true
 #if DEBUG
-                print("[AdManager] Reward earned")
+            print("[AdManager] Reward earned")
 #endif
-            }
         }
     }
 

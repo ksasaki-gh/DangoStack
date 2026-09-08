@@ -33,12 +33,16 @@ struct HitJudge {
         let horizontalOffset = dangoX - nearestSkewerX
         let horizontalDistance = abs(horizontalOffset)
 
-        let perfectThreshold = dangoDiameter
+        let rawPerfectThreshold = dangoDiameter
             * perfectThresholdRatio
             * max(perfectThresholdScale, 0)
         let goodThreshold = dangoDiameter
             * goodThresholdRatio
             * max(goodThresholdScale, 0)
+        // Keep the inner judgement inside GOOD even if future tuning values
+        // are entered in an invalid combination.
+        let maximumPerfectThreshold = max(goodThreshold - 0.001, 0)
+        let perfectThreshold = min(rawPerfectThreshold, maximumPerfectThreshold)
 
         if horizontalDistance <= perfectThreshold {
             return .perfect

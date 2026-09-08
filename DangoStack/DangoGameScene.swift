@@ -44,15 +44,16 @@ final class DangoGameScene: SKScene {
         static let skewerXPositionRatios: [CGFloat] = [0.25, 0.5, 0.75]
         static let skewerCenterYRatio: CGFloat = 0.23
         static let skewerWidthRatio: CGFloat = 0.030
+        static let minimumSkewerWidth: CGFloat = 7
         static let skewerHeightRatio: CGFloat = 0.30
     }
 
     private enum DangoParameters {
         static let diameter: CGFloat = 56
         static let horizontalRangeRatios: ClosedRange<CGFloat> = 0.18...0.82
-        static let tapSquashScaleX: CGFloat = 1.16
-        static let tapSquashScaleY: CGFloat = 0.82
-        static let tapSquashDuration: TimeInterval = 0.08
+        static let tapSquashScaleX: CGFloat = 0.96
+        static let tapSquashScaleY: CGFloat = 0.92
+        static let tapSquashDuration: TimeInterval = 0.045
         static let initialFallSpeed: CGFloat = 0
         static let fallAcceleration: CGFloat = 1350
         static let maximumFallSpeed: CGFloat = 975
@@ -457,10 +458,11 @@ final class DangoGameScene: SKScene {
     }
 
     private func layoutSkewers() {
+        let configuredWidth = size.width
+            * Layout.skewerWidthRatio
+            * currentStageConfig.skewerWidthScale
         let skewerSize = CGSize(
-            width: size.width
-                * Layout.skewerWidthRatio
-                * currentStageConfig.skewerWidthScale,
+            width: max(configuredWidth, Layout.minimumSkewerWidth),
             height: size.height * Layout.skewerHeightRatio
         )
         let skewerRect = CGRect(
@@ -1074,7 +1076,9 @@ final class DangoGameScene: SKScene {
             goodThresholdScale: currentStageConfig.goodJudgeScale
         )
 
+#if DEBUG
         print("[HitJudge] \(debugText(for: result))")
+#endif
 
         if case .miss = result {
             showJudgeFeedback(
@@ -1096,7 +1100,9 @@ final class DangoGameScene: SKScene {
 
         guard let dangoColor = currentDangoColor else { return }
         guard let requiredColor = skewerStates[targetSkewerIndex].nextRequiredColor else {
+#if DEBUG
             print("[Landing] WRONG: skewer is full")
+#endif
             handleWrongLanding(
                 dango,
                 targetSkewerIndex: targetSkewerIndex,
@@ -1106,10 +1112,12 @@ final class DangoGameScene: SKScene {
         }
 
         guard dangoColor == requiredColor else {
+#if DEBUG
             print(
                 "[Landing] WRONG: \(dangoColor.rawValue), "
                     + "required: \(requiredColor.rawValue)"
             )
+#endif
             handleWrongLanding(
                 dango,
                 targetSkewerIndex: targetSkewerIndex,
@@ -1795,10 +1803,12 @@ final class DangoGameScene: SKScene {
         }
         activeFailureCount += 1
 
+#if DEBUG
         print(
             "[Failure] \(failureKind.rawValue): "
                 + "\(activeFailureCount)/\(FailureParameters.maximumCount)"
         )
+#endif
         breakLifeIndicator(forFailureCount: activeFailureCount)
         tutorialDidProcessFirstDango()
 
@@ -1844,6 +1854,7 @@ final class DangoGameScene: SKScene {
             && skewerStates.allSatisfy(\.isFull)
     }
 
+#if DEBUG
     private func debugText(for result: HitResult) -> String {
         switch result {
         case .perfect:
@@ -1856,6 +1867,7 @@ final class DangoGameScene: SKScene {
             return "MISS"
         }
     }
+#endif
 
     private var currentStageConfig: StageConfig {
         stageManager.currentConfig
